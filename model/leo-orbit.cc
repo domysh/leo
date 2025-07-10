@@ -17,8 +17,31 @@
  */
 
 #include "leo-orbit.h"
+#include "ns3/vector.h"
 
 namespace ns3 {
+
+Vector3D
+CrossProduct (const Vector3D &l, const Vector3D &r)
+{
+  return Vector3D (l.y * r.z - l.z * r.y,
+		   l.z * r.x - l.x * r.z,
+		   l.x * r.y - l.y * r.x);
+}
+
+Vector3D
+Product (const double &l, const Vector3D &r)
+{
+  return Vector3D (l * r.x,
+		   l * r.y,
+		   l * r.z);
+}
+
+double
+DotProduct (const Vector3D &l, const Vector3D &r)
+{
+  return (l.x* r.x) + (l.y*r.y) + (l.z*r.z);
+}
 
 std::ostream &operator << (std::ostream &os, const LeoOrbit &orbit)
 {

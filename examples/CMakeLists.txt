@@ -4,6 +4,7 @@
 # Basic examples that don't require special dependencies
 set(basic_examples
     leo-circular-orbit-tracing-example
+    leo-car-move-trace-example
 )
 
 # Examples that require additional modules (aodv, epidemic-routing)

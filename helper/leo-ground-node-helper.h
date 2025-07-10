@@ -74,18 +74,32 @@ public:
   			 const LeoLatLong &location2);
 
   /**
+   * \brief Install one node at one location
+   * \param location
+   * \returns a node container containing the node using the specified attribute
+   */
+  NodeContainer Install (const LeoLatLong &location);
+
+  /**
    * \brief Set an attribute for each node
    * \param name name of the attribute
    * \param value value of the attribute
    */
   void SetAttribute (std::string name, const AttributeValue &value);
 
+    /**
+   * \brief Convert the latitude and longitude to a position on the Earth
+   * \param loc location
+   * \returns a 3D vector point on the Earth's surface
+   */
+  /// 
+  static Vector3D GetEarthPosition (const LeoLatLong &loc);
+
 private:
   /// Fatory for nodes
   ObjectFactory m_gndNodeFactory;
 
-  /// Convert the latitude and longitude to a position on a sphere
-  static Vector3D GetEarthPosition (const LeoLatLong &loc);
+
 };
 
 }; // namespace ns3
