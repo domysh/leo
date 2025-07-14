@@ -2,6 +2,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+import matplotlib
+matplotlib.use('TkAgg')
+
 # Supponiamo che il tuo file CSV si chiami 'punti_3d.csv'
 # e che abbia tre colonne chiamate 'X', 'Y' e 'Z'.
 # Se i nomi delle colonne sono diversi, modificali di conseguenza.
@@ -48,6 +51,9 @@ z_sphere = radius_earth * np.outer(np.ones(np.size(u)), np.cos(v))
 
 # Plot della sfera
 ax.plot_surface(x_sphere, y_sphere, z_sphere, color='green', alpha=0.7, label='Terra')
+
+# Imposta aspect ratio uguale per tutti gli assi per mostrare una sfera perfetta
+ax.set_box_aspect([1,1,1])
 
 # Imposta le etichette degli assi
 ax.set_xlabel('Asse X')
