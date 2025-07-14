@@ -45,6 +45,7 @@ if(aodv IN_LIST ns3-all-enabled-modules)
                             ${libcore}
                             ${libmobility}
                             ${libaodv}
+                            ${libnr}
                             ${libepidemic-routing}
         )
       endforeach()

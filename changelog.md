@@ -46,13 +46,13 @@ Dataset satelliti starlink: https://celestrak.org/NORAD/elements/gp.php?GROUP=st
 
 # Inizio di implementazione della comunicazione satellite-veicolo con 5g-lena
 
-- https://cttc-lena.gitlab.io/nr/html/cttc-3gpp-channel-example_8cc_source.html
+- Implementando un esempio in ns-3-leo partendo da: https://cttc-lena.gitlab.io/nr/html/cttc-3gpp-channel-example_8cc_source.html e dalla simulazione precedente in modo da iniziare a provare la comunicazione tramite 5g-lena tra un satellite e un veicolo sulla terra, utilizzando il mobility model creato precedentemente.
+- Implementato il disegno di una sfera su matplotlib per visualizzare la terra in modo da visualizzare più coerentemente i movimenti del satellite e del veicolo sulla terra, in modo da poter visualizzare graficamente il risultato della simulazione.
 
+
+NOTE:
 NtN model default NS3 su 3gpp
 ThreeGppPropagationLossModel
 -154 -150 db S/N chiusura link
 Antenna, modello canale, path loss e S/N
-log in markdown
-
-- TODO
 
