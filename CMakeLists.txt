@@ -70,6 +70,9 @@ set(dependencies
     point-to-point
     netanim
     aodv
+    buildings
+    antenna
+    mobility
 )
 
 

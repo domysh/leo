@@ -1,4 +1,6 @@
 #include <fstream>
+#include <iostream>
+#include <cmath>
 
 #include "ns3/leo-module.h"
 #include "ns3/leo-ground-node-helper.h"
@@ -19,13 +21,220 @@
 
 using namespace ns3;
 
+static Ptr<ThreeGppPropagationLossModel>
+    m_propagationLossModel; //!< the PropagationLossModel object
+static Ptr<ThreeGppSpectrumPropagationLossModel>
+    m_spectrumLossModel;          //!< the SpectrumPropagationLossModel object
+static std::ofstream traceFileOutputStream;
+static std::ofstream resultsFile; //!< The results file
+
+/*
+**
+ * @brief Create the PSD for the TX
+ *
+ * @param fcHz the carrier frequency in Hz
+ * @param pwrDbm the transmission power in dBm
+ * @param bwHz the bandwidth in Hz
+ * @param rbWidthHz the Resource Block (RB) width in Hz
+ *
+ * @return the pointer to the PSD
+ *
+Ptr<SpectrumValue>
+CreateTxPowerSpectralDensity(double fcHz, double pwrDbm, double bwHz, double rbWidthHz)
+{
+    unsigned int numRbs = std::floor(bwHz / rbWidthHz);
+    double f = fcHz - (numRbs * rbWidthHz / 2.0);
+    double powerTx = pwrDbm; // dBm power
+ 
+    Bands rbs; // A vector representing each resource block
+    for (uint32_t numrb = 0; numrb < numRbs; ++numrb)
+    {
+        BandInfo rb;
+        rb.fl = f;
+        f += rbWidthHz / 2;
+        rb.fc = f;
+        f += rbWidthHz / 2;
+        rb.fh = f;
+ 
+        rbs.push_back(rb);
+    }
+    Ptr<SpectrumModel> model = Create<SpectrumModel>(rbs);
+    Ptr<SpectrumValue> txPsd = Create<SpectrumValue>(model);
+ 
+    double powerTxW = std::pow(10., (powerTx - 30) / 10); // Get Tx power in Watts
+    double txPowerDensity = (powerTxW / bwHz);
+ 
+    for (auto psd = txPsd->ValuesBegin(); psd != txPsd->ValuesEnd(); ++psd)
+    {
+        *psd = txPowerDensity;
+    }
+ 
+    return txPsd; // [W/Hz]
+}
+ 
+**
+ * @brief A structure that holds the parameters for the
+ * ComputeSnr function. In this way the problem with the limited
+ * number of parameters of method Schedule is avoided.
+ *
+struct ComputeSnrParams
+{
+    Ptr<MobilityModel> txMob;        //!< the tx mobility model
+    Ptr<MobilityModel> rxMob;        //!< the rx mobility model
+    double txPow;                    //!< the tx power in dBm
+    double noiseFigure;              //!< the noise figure in dB
+    Ptr<PhasedArrayModel> txAntenna; //!< the tx antenna array
+    Ptr<PhasedArrayModel> rxAntenna; //!< the rx antenna array
+    double frequency;                //!< the carrier frequency in Hz
+    double bandwidth;                //!< the total bandwidth in Hz
+    double resourceBlockBandwidth;   //!< the Resource Block bandwidth in Hz
+ 
+    **
+     * @brief Constructor
+     * @param pTxMob the tx mobility model
+     * @param pRxMob the rx mobility model
+     * @param pTxPow the tx power in dBm
+     * @param pNoiseFigure the noise figure in dB
+     * @param pTxAntenna the tx antenna array
+     * @param pRxAntenna the rx antenna array
+     * @param pFrequency the carrier frequency in Hz
+     * @param pBandwidth the total bandwidth in Hz
+     * @param pResourceBlockBandwidth the Resource Block bandwidth in Hz
+     *
+    ComputeSnrParams(Ptr<MobilityModel> pTxMob,
+                     Ptr<MobilityModel> pRxMob,
+                     double pTxPow,
+                     double pNoiseFigure,
+                     Ptr<PhasedArrayModel> pTxAntenna,
+                     Ptr<PhasedArrayModel> pRxAntenna,
+                     double pFrequency,
+                     double pBandwidth,
+                     double pResourceBlockBandwidth)
+    {
+        txMob = pTxMob;
+        rxMob = pRxMob;
+        txPow = pTxPow;
+        noiseFigure = pNoiseFigure;
+        txAntenna = pTxAntenna;
+        rxAntenna = pRxAntenna;
+        frequency = pFrequency;
+        bandwidth = pBandwidth;
+        resourceBlockBandwidth = pResourceBlockBandwidth;
+    }
+};
+
+**
+ * @brief Create the noise PSD for the
+ *
+ * @param fcHz the carrier frequency in Hz
+ * @param noiseFigureDb the noise figure in dB
+ * @param bwHz the bandwidth in Hz
+ * @param rbWidthHz the Resource Block (RB) width in Hz
+ *
+ * @return the pointer to the noise PSD
+ *
+Ptr<SpectrumValue>
+CreateNoisePowerSpectralDensity(double fcHz, double noiseFigureDb, double bwHz, double rbWidthHz)
+{
+    unsigned int numRbs = std::floor(bwHz / rbWidthHz);
+    double f = fcHz - (numRbs * rbWidthHz / 2.0);
+ 
+    Bands rbs;              // A vector representing each resource block
+    std::vector<int> rbsId; // A vector representing the resource block IDs
+    for (uint32_t numrb = 0; numrb < numRbs; ++numrb)
+    {
+        BandInfo rb;
+        rb.fl = f;
+        f += rbWidthHz / 2;
+        rb.fc = f;
+        f += rbWidthHz / 2;
+        rb.fh = f;
+ 
+        rbs.push_back(rb);
+        rbsId.push_back(numrb);
+    }
+    Ptr<SpectrumModel> model = Create<SpectrumModel>(rbs);
+    Ptr<SpectrumValue> txPsd = Create<SpectrumValue>(model);
+ 
+    // see "LTE - From theory to practice"
+    // Section 22.4.4.2 Thermal Noise and Receiver Noise Figure
+    const double ktDbmHz = -174.0;                        // dBm/Hz
+    double ktWHz = std::pow(10.0, (ktDbmHz - 30) / 10.0); // W/Hz
+    double noiseFigureLinear = std::pow(10.0, noiseFigureDb / 10.0);
+ 
+    double noisePowerSpectralDensity = ktWHz * noiseFigureLinear;
+ 
+    for (auto rbId : rbsId)
+    {
+        (*txPsd)[rbId] = noisePowerSpectralDensity;
+    }
+ 
+    return txPsd; // W/Hz
+}
+
+**
+ * Compute the average SNR
+ * @param params A structure that holds the parameters that are needed to perform calculations in
+ * ComputeSnr
+ *
+static void
+ComputeSnr(ComputeSnrParams& params)
+{
+    Ptr<SpectrumValue> txPsd = CreateTxPowerSpectralDensity(params.frequency,
+                                                            params.txPow,
+                                                            params.bandwidth,
+                                                            params.resourceBlockBandwidth);
+    Ptr<SpectrumValue> rxPsd = txPsd->Copy();
+    NS_LOG_DEBUG("Average tx power " << 10 * log10(Sum(*txPsd) * params.resourceBlockBandwidth)
+                                     << " dB");
+ 
+    // create the noise PSD
+    Ptr<SpectrumValue> noisePsd = CreateNoisePowerSpectralDensity(params.frequency,
+                                                                  params.noiseFigure,
+                                                                  params.bandwidth,
+                                                                  params.resourceBlockBandwidth);
+    NS_LOG_DEBUG("Average noise power "
+                 << 10 * log10(Sum(*noisePsd) * params.resourceBlockBandwidth) << " dB");
+ 
+    // apply the pathloss
+    double propagationGainDb = m_propagationLossModel->CalcRxPower(0, params.txMob, params.rxMob);
+    NS_LOG_DEBUG("Pathloss " << -propagationGainDb << " dB");
+    double propagationGainLinear = std::pow(10.0, (propagationGainDb) / 10.0);
+    *(rxPsd) *= propagationGainLinear;
+ 
+    NS_ASSERT_MSG(params.txAntenna, "params.txAntenna is nullptr!");
+    NS_ASSERT_MSG(params.rxAntenna, "params.rxAntenna is nullptr!");
+ 
+    Ptr<SpectrumSignalParameters> rxSsp = Create<SpectrumSignalParameters>();
+    rxSsp->psd = rxPsd;
+    rxSsp->txAntenna =
+        ConstCast<AntennaModel, const AntennaModel>(params.txAntenna->GetAntennaElement());
+ 
+    // apply the fast fading and the beamforming gain
+    rxSsp = m_spectrumLossModel->CalcRxPowerSpectralDensity(rxSsp,
+                                                            params.txMob,
+                                                            params.rxMob,
+                                                            params.txAntenna,
+                                                            params.rxAntenna);
+    NS_LOG_DEBUG("Average rx power " << 10 * log10(Sum(*rxSsp->psd) * params.bandwidth) << " dB");
+ 
+    // compute the SNR
+    NS_LOG_DEBUG("Average SNR " << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " dB");
+ 
+    // print the SNR and pathloss values in the output file
+    resultsFile << Simulator::Now().GetSeconds() << " "
+                << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " " << propagationGainDb
+                << std::endl;
+}
+
+
+*/
+
 // Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
 //
 // SPDX-License-Identifier: GPL-2.0-only
 
 NS_LOG_COMPONENT_DEFINE ("LeoNrSendExample");
-
-std::ofstream traceFileOutputStream;
 
 void CourseChange (std::string context, Ptr<const MobilityModel> position)
 {
@@ -37,7 +246,7 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
 int main(int argc, char *argv[])
 {
 
-    std::string scenario = "UMa"; // scenario
+    std::string scenario = "NTN-Suburban"; // scenario
     double frequency = 28e9;      // central frequency
     double bandwidth = 100e6;     // bandwidth
     bool logging = true; // whether to enable logging from the simulation, another option is by
@@ -65,14 +274,16 @@ int main(int argc, char *argv[])
     cmd.Parse(argc, argv);
 
   LeoOrbitNodeHelper orbit;
-  NodeContainer satellites = orbit.Install (LeoOrbit (400, 20, 10, 1));
-
+  MobilityHelper mobility;
+  
+  // Create and configure satellites using LEO orbit helper
+  NodeContainer satellites = orbit.Install (LeoOrbit (300, 20, 1, 1)); // 300km altitude, 20° inclination, 1 satellite per plane, 1 plane
+  
   // Create ground nodes (cars)
   NodeContainer cars;
-  cars.Create (3); // Create 1 car
-
+  cars.Create (1); // Create 3 cars
+  
   // Install GndConstantVelocityMobilityModel on cars
-  MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
                              "InitialLatitude", DoubleValue (carLatitude),
                              "InitialLongitude", DoubleValue (carLongitude),
@@ -81,22 +292,6 @@ int main(int argc, char *argv[])
                              "Azimuth", DoubleValue (0),
                              "Precision", TimeValue (Seconds (1.0))); // Update every second
   mobility.Install (cars.Get(0));
-  mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
-                            "InitialLatitude", DoubleValue (carLatitude),
-                            "InitialLongitude", DoubleValue (carLongitude),
-                            "Altitude", DoubleValue (3),
-                            "Speed", DoubleValue (carSpeed),
-                            "Azimuth", DoubleValue (120),
-                            "Precision", TimeValue (Seconds (1.0))); // Update every second
-  mobility.Install (cars.Get(1));
-  mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
-                            "InitialLatitude", DoubleValue (carLatitude),
-                            "InitialLongitude", DoubleValue (carLongitude),
-                            "Altitude", DoubleValue (3),
-                            "Speed", DoubleValue (carSpeed),
-                            "Azimuth", DoubleValue (240),
-                            "Precision", TimeValue (Seconds (1.0))); // Update every second
-mobility.Install (cars.Get(2));
 
   if (traceFile != "")
     {
@@ -160,7 +355,7 @@ mobility.Install (cars.Get(2));
     channelHelper->ConfigureFactories(
         scenario,
         "Default",
-        "ThreeGpp"); // Configure the spectrum channel with the scenario
+        "ThreeGpp"); // Use TwoRay propagation model instead of ThreeGpp for simplicity
     channelHelper->AssignChannelsToBands({band});
     allBwps = CcBwpCreator::GetAllBwps({band});
  
@@ -192,7 +387,6 @@ mobility.Install (cars.Get(2));
     randomStream += nrHelper->AssignStreams(ueNetDev, randomStream);
  
     nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(txPower);
-    nrHelper->GetGnbPhy(gnbNetDev.Get(1), 0)->SetTxPower(txPower);
  
     // create the internet and install the IP stack on the UEs
     // get SGW/PGW and create a single RemoteHost
@@ -247,7 +441,7 @@ mobility.Install (cars.Get(2));
     if (traceFileOutputStream.is_open()){
       traceFileOutputStream.close();
     }
-     cout << "Received packets: " << receivedPackets << std::endl;
+    std::cout << "Received packets: " << receivedPackets << std::endl;
     if (receivedPackets == 10)
     {
         return EXIT_SUCCESS;

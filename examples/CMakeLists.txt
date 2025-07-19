@@ -8,11 +8,14 @@ set(basic_examples
 )
 
 # Examples that require additional modules (aodv, epidemic-routing)
-set(advanced_examples
+set(routing_examples
     leo-delay-tracing-example
     leo-bulk-send-example
+)
+
+# Examples that require NR module
+set(nr_examples
     leo-nr-send-example
-    
 )
 
 # Build basic examples
@@ -31,30 +34,22 @@ endforeach()
 
 # Build advanced examples (check if required modules are available)
 if(aodv IN_LIST ns3-all-enabled-modules)
-  # Check if epidemic-routing is available
+  # Check if epidemic-routing is available for routing examples
   if(epidemic-routing IN_LIST ns3-all-enabled-modules)
-    if (nr IN_LIST ns3-all-enabled-modules)
-      foreach(
-        example
-        ${advanced_examples}
+    foreach(
+      example
+      ${routing_examples}
+    )
+      build_lib_example(
+        NAME ${example}
+        SOURCE_FILES ${example}.cc
+        LIBRARIES_TO_LINK ${libleo}
+                          ${libcore}
+                          ${libmobility}
+                          ${libaodv}
+                          ${libepidemic-routing}
       )
-        build_lib_example(
-          NAME ${example}
-          SOURCE_FILES ${example}.cc
-          LIBRARIES_TO_LINK ${libleo}
-                            ${libcore}
-                            ${libmobility}
-                            ${libaodv}
-                            ${libnr}
-                            ${libepidemic-routing}
-        )
-      endforeach()
-    else()
-      message(
-        WARNING
-          "leo-delay-tracing-example and leo-bulk-send-example require nr (5g-lena) module"
-      )
-    endif()
+    endforeach()
   else()
     message(
       WARNING
@@ -65,5 +60,32 @@ else()
   message(
     WARNING
       "leo-delay-tracing-example and leo-bulk-send-example require aodv module"
+  )
+endif()
+
+# Build NR examples if nr module is available
+if(nr IN_LIST ns3-all-enabled-modules)
+  foreach(
+    example
+    ${nr_examples}
+  )
+    build_lib_example(
+      NAME ${example}
+      SOURCE_FILES ${example}.cc
+      LIBRARIES_TO_LINK ${libleo}
+                        ${libcore}
+                        ${libmobility}
+                        ${libnr}
+                        ${libantenna}
+                        ${libbuildings}
+                        ${libinternet}
+                        ${libapplications}
+                        ${libpoint-to-point}
+    )
+  endforeach()
+else()
+  message(
+    WARNING
+      "leo-nr-send-example requires nr (5g-lena) module"
   )
 endif()

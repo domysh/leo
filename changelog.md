@@ -51,8 +51,17 @@ Dataset satelliti starlink: https://celestrak.org/NORAD/elements/gp.php?GROUP=st
 
 
 NOTE:
+
 NtN model default NS3 su 3gpp
+
 ThreeGppPropagationLossModel
+
 -154 -150 db S/N chiusura link
+
 Antenna, modello canale, path loss e S/N
 
+Link utile per abilitare 5g-lena alle NTN networks: [https://ieeexplore.ieee.org/document/9469494](https://ieeexplore.ieee.org/document/9469494)
+
+https://www.nsnam.org/workshops/wns3-2023/04-sandri-slides-wns3-2023.pdf
+
+https://www.nsnam.org/doxygen/d7/d09/three-gpp-ntn-channel-example_8cc_source.html

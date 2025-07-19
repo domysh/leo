@@ -67,6 +67,72 @@ public:
   /// destructor
   virtual ~GndConstantVelocityMobilityModel ();
 
+    /**
+     * @brief Computes elevation angle between a ground terminal and a HAPS/Satellite.
+     * After calculating the plane perpendicular to a cartesian position vector,
+     * the elevation angle is calculated using
+     * https://www.w3schools.blog/angle-between-a-line-and-a-plane.
+     * The altitude of the position passed as a parameter must be higher than that of the reference
+     * point.
+     * @param other pointer to the HAPS/satellite mobility model
+     * @return the elevation angle
+     * in degrees
+     */
+    virtual double GetElevationAngle(Ptr<const GeocentricConstantPositionMobilityModel> other);
+ 
+    /**
+     * @brief Get the position using geographic (geodetic) coordinates
+     * @return Vector containing (latitude (degree), longitude (degree), altitude (meter))
+     */
+    virtual Vector GetGeographicPosition() const;
+ 
+    /**
+     * @brief Set the position using geographic coordinates
+     *
+     * Sets the position, using geographic coordinates and asserting
+     * that the provided parameter falls within the appropriate range.
+     *
+     * @param latLonAlt pointer to a Vector containing (latitude (degree), longitude (degree),
+     * altitude (meter)). The values are expected to be in the ranges [-90, 90], [-180, 180], [0,
+     * +inf[, respectively. These assumptions are enforced with an assert for the latitude and the
+     * altitude, while the longitude is normalized to the expected range.
+     */
+    virtual void SetGeographicPosition(const Vector& latLonAlt);
+ 
+    /**
+     * @brief Get the position using Geocentric Cartesian coordinates
+     * @return Vector containing (x, y, z) (meter) coordinates
+     */
+    virtual Vector GetGeocentricPosition() const;
+ 
+    /**
+     * @brief Set the position using Geocentric Cartesian coordinates
+     * @param position pointer to a Vector containing (x, y, z) (meter) coordinates
+     */
+    virtual void SetGeocentricPosition(const Vector& position);
+ 
+    /**
+     * @brief Set the reference point for coordinate conversion
+     * @param refPoint vector containing the geographic reference point (meter)
+     */
+    virtual void SetCoordinateTranslationReferencePoint(const Vector& refPoint);
+ 
+    /**
+     * @brief Get the reference point for coordinate conversion
+     * @return Vector containing geographic reference point (meter)
+     */
+    virtual Vector GetCoordinateTranslationReferencePoint() const;
+ 
+    /**
+     * @return the current position
+     */
+    virtual Vector GetPosition() const;
+ 
+    /**
+     * @param position the position to set.
+     */
+    virtual void SetPosition(const Vector& position);
+
 private:
 
   /**
