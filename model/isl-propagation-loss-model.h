@@ -29,8 +29,6 @@
  * Declaration of IslPropagationLossModel
  */
 
-#define LEO_EARTH_RAD 6.371009e6
-
 namespace ns3 {
 
 /**

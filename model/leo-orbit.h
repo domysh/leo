@@ -21,6 +21,7 @@
 
 #include "ns3/uinteger.h"
 #include "ns3/vector.h"
+#include "ns3/geographic-positions.h"
 
 /**
  * \file
@@ -56,6 +57,8 @@ Vector3D Product (const double &l, const Vector3D &r);
  * \return dot product scalar value
  */
 double DotProduct (const Vector3D &l, const Vector3D &r);
+
+Vector CartesianToTopocentric (const Vector &v, const Vector &referencePoint, GeographicPositions::EarthSpheroidType sphereType = GeographicPositions::SPHERE);
 
 class LeoOrbit;
 

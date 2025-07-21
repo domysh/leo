@@ -20,7 +20,7 @@
 #include "ns3/mobility-model.h"
 #include "ns3/double.h"
 #include "math.h"
-
+#include "ns3/geographic-positions.h"
 #include "isl-propagation-loss-model.h"
 
 namespace ns3 {
@@ -67,7 +67,7 @@ IslPropagationLossModel::GetLos (Ptr<MobilityModel> moda, Ptr<MobilityModel> mod
 
   double a = u.x*u.x + u.y*u.y + u.z*u.z;
   double b = 2.0 * (oc.x*u.x + oc.y*u.y + oc.z*u.z);
-  double c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - (LEO_EARTH_RAD*LEO_EARTH_RAD);
+  double c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - (GeographicPositions::EARTH_SPHERE_RADIUS*GeographicPositions::EARTH_SPHERE_RADIUS);
   double discriminant = b*b - 4*a*c;
 
   NS_LOG_DEBUG ("a_pos="<<moda->GetPosition ()<<";b_pos"<<modb->GetPosition ()

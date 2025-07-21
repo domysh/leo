@@ -22,7 +22,7 @@
 #include "ns3/test.h"
 #include "ns3/integer.h"
 #include "ns3/nstime.h"
-
+#include "ns3/geographic-positions.h"
 #include "../model/leo-circular-orbit-mobility-model.h"
 
 using namespace ns3;
@@ -72,7 +72,7 @@ private:
     mob->SetAttribute ("Altitude", DoubleValue (0.0));
     mob->SetAttribute ("Inclination", DoubleValue (1.0));
 
-    NS_TEST_ASSERT_MSG_EQ_TOL (mob->GetPosition ().GetLength() / 1000, LEO_EARTH_RAD_KM, 0.1, "unexpected position on earths surface for 1 deg inclination");
+    NS_TEST_ASSERT_MSG_EQ_TOL (mob->GetPosition ().GetLength() / 1000, GeographicPositions::EARTH_SPHERE_RADIUS/1000.0, 0.1, "unexpected position on earths surface for 1 deg inclination");
   }
 };
 
@@ -102,7 +102,7 @@ private:
     mob->SetAttribute ("Inclination", DoubleValue (20.0));
 
     Vector pos = mob->GetPosition ();
-    Simulator::Schedule (Seconds (100.0), &LeoOrbitProgressTestCase::TestLengthPosition, this, LEO_EARTH_RAD_KM, pos.x, mob);
+    Simulator::Schedule (Seconds (100.0), &LeoOrbitProgressTestCase::TestLengthPosition, this, GeographicPositions::EARTH_SPHERE_RADIUS/1000.0, pos.x, mob);
     Simulator::Stop (Seconds (101.0));
     Simulator::Run ();
     Simulator::Destroy ();

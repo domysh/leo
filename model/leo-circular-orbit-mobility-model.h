@@ -24,6 +24,7 @@
 #include "ns3/log.h"
 #include "ns3/mobility-model.h"
 #include "ns3/nstime.h"
+#include "ns3/geocentric-constant-position-mobility-model.h"
 
 /**
  * \file
@@ -32,7 +33,6 @@
  * Declaration of LeoCircularOrbitMobilityModel
  */
 
-#define LEO_EARTH_RAD_KM 6371.0090
 #define LEO_EARTH_GM_KM_E10 39.8600436
 
 namespace ns3 {
@@ -44,7 +44,7 @@ namespace ns3 {
  * This uses simple circular orbits based on the inclination of the orbital
  * plane and the height of the satellite.
  */
-class LeoCircularOrbitMobilityModel : public MobilityModel
+class LeoCircularOrbitMobilityModel : public GeocentricConstantPositionMobilityModel
 {
 public:
   /**
@@ -89,7 +89,7 @@ public:
 private:
 
   /**
-   * Orbit height in m
+   * Orbit height from the center of the Earth in km
    */
   double m_orbitHeight;
 
@@ -121,15 +121,20 @@ private:
   /**
    * \return the current position.
    */
-  virtual Vector DoGetPosition (void) const;
+  virtual Vector DoGetPosition (void) const override;
   /**
    * \param position the position to set.
    */
-  virtual void DoSetPosition (const Vector &position);
+  virtual void DoSetPosition (const Vector &position) override;
   /**
    * \return the current velocity.
    */
-  virtual Vector DoGetVelocity (void) const;
+  virtual Vector DoGetVelocity (void) const override;
+  /**
+   * \brief Get geographic velocity
+   * \return the current geographic velocity.
+   */
+  virtual Vector DoGetGeocentricVelocity() const;
 
   /**
    * \brief Get the normal vector of the orbital plane
@@ -173,6 +178,12 @@ private:
    * \return position that will be returned upon next call to DoGetPosition
    */
   Vector Update ();
+
+  // GeocentricConstantPositionMobilityModel interface
+  virtual Vector DoGetGeographicPosition() const override;
+  virtual void DoSetGeographicPosition(const Vector& latLonAlt) override;
+  virtual Vector DoGetGeocentricPosition() const override;
+  virtual void DoSetGeocentricPosition(const Vector& position) override;
 };
 
 }

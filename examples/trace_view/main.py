@@ -1,70 +1,181 @@
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import numpy as np
+import os
 
-import matplotlib
-matplotlib.use('TkAgg')
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# Supponiamo che il tuo file CSV si chiami 'punti_3d.csv'
-# e che abbia tre colonne chiamate 'X', 'Y' e 'Z'.
-# Se i nomi delle colonne sono diversi, modificali di conseguenza.
+# GPU-accelerated 3D visualization using Plotly with WebGL rendering
+# This provides much better performance for large datasets
 
 try:
+    print("Loading CSV data...")
     df = pd.read_csv('punti_3d.csv')
+    print(f"Loaded {len(df)} data points")
+    print(f"Columns: {df.columns.tolist()}")
+    print(f"First 5 rows:\n{df.head()}")
 except FileNotFoundError:
     print("Errore: il file 'punti_3d.csv' non è stato trovato.")
     print("Assicurati che il file si trovi nella stessa directory dello script o specifica il percorso completo.")
     exit()
 
-# Crea una nuova figura e un asse 3D
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-# Estrai le coordinate X, Y e Z dal DataFrame
+# Extract data
 whois = df["Node"]
 x = df['X']
 y = df['Y']
 z = df['Z']
 
-# Ottieni i nodi unici per assegnare colori diversi
+# Earth radius in meters
+EARTH_RADIUS = 6.371e6
+
+# Function to format altitude with appropriate units
+def format_altitude(altitude_m):
+    """
+    Format altitude with appropriate units based on magnitude
+    """
+    if abs(altitude_m) >= 1000:
+        return f"{altitude_m/1000:.1f} km"
+    else:
+        return f"{altitude_m:.0f} m"
+
+# Function to convert ECEF coordinates to Lat/Lon/Alt
+def ecef_to_lla(x, y, z):
+    """
+    Convert ECEF (Earth-Centered, Earth-Fixed) coordinates to Latitude, Longitude, Altitude
+    """
+    # Calculate distance from Earth center
+    distance = np.sqrt(x**2 + y**2 + z**2)
+    
+    # Calculate latitude (in radians, then convert to degrees)
+    latitude_rad = np.arcsin(z / distance)
+    latitude_deg = np.degrees(latitude_rad)
+    
+    # Calculate longitude (in radians, then convert to degrees)  
+    longitude_rad = np.arctan2(y, x)
+    longitude_deg = np.degrees(longitude_rad)
+    
+    # Calculate altitude (distance from Earth surface)
+    altitude = distance - EARTH_RADIUS
+    
+    return latitude_deg, longitude_deg, altitude, distance
+
+# Calculate geographic coordinates for all points
+print("Converting ECEF coordinates to Lat/Lon/Alt...")
+latitudes, longitudes, altitudes, distances = ecef_to_lla(x.values, y.values, z.values)
+
+# Add geographic data to dataframe
+df['Latitude'] = latitudes
+df['Longitude'] = longitudes  
+df['Altitude'] = altitudes
+df['Distance_from_center'] = distances
+
+# Check for points below Earth surface
+underground_mask = altitudes < 0
+underground_count = np.sum(underground_mask)
+
+if underground_count > 0:
+    print(f"\n⚠️  WARNING: {underground_count} points are below Earth surface!")
+    underground_points = df[underground_mask][['Node', 'Time', 'X', 'Y', 'Z', 'Latitude', 'Longitude', 'Altitude']]
+    print("Underground points details:")
+    print(underground_points.to_string(index=False))
+    print(f"Most underground point: {format_altitude(altitudes.min())} below surface")
+    
+    # Group by node to see which nodes have underground points
+    nodes_underground = underground_points['Node'].unique()
+    print(f"Nodes with underground points: {nodes_underground}")
+else:
+    print("✅ All points are above Earth surface")
+
+# Print statistics with appropriate units
+print("\nGeographic Statistics:")
+print(f"Latitude range: {np.nanmin(latitudes):.2f}° to {np.nanmax(latitudes):.2f}°")
+print(f"Longitude range: {longitudes.min():.2f}° to {longitudes.max():.2f}°")
+print(f"Altitude range: {format_altitude(altitudes.min())} to {format_altitude(altitudes.max())}")
+print(f"Average altitude: {format_altitude(np.nanmean(altitudes))}")
+
+# Get unique nodes and colors
 nodi_unici = whois.unique()
 colori = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
 
-# Crea lo scatter plot 3D con colori diversi per ogni nodo
+# Create figure with GPU-accelerated WebGL rendering
+fig = go.Figure()
+
+# Add scatter traces for each node with WebGL for GPU acceleration
 for i, nodo in enumerate(nodi_unici):
     mask = whois == nodo
-    colore = colori[i % len(colori)]  # Cicla i colori se ci sono più nodi che colori
-    ax.scatter(x[mask], y[mask], z[mask], c=colore, marker='o', label=f'Nodo {nodo}')
+    colore = colori[i % len(colori)]
+    
+    # Create hover text with geographic coordinates
+    hover_text = []
+    for idx in df[mask].index:
+        text = (f"Node: {nodo}<br>"
+                f"Lat: {df.loc[idx, 'Latitude']:.3f}°<br>"
+                f"Lon: {df.loc[idx, 'Longitude']:.3f}°<br>"
+                f"Alt: {format_altitude(df.loc[idx, 'Altitude'])}<br>"
+                f"X: {df.loc[idx, 'X']:.0f}<br>"
+                f"Y: {df.loc[idx, 'Y']:.0f}<br>"
+                f"Z: {df.loc[idx, 'Z']:.0f}")
+        hover_text.append(text)
+    
+    fig.add_trace(go.Scatter3d(
+        x=x[mask],
+        y=y[mask], 
+        z=z[mask],
+        mode='markers',
+        marker=dict(
+            color=colore,
+            size=3,
+            opacity=1,
+            line=dict(width=0.3, color=colore)
+        ),
+        hovertemplate='%{hovertext}<extra></extra>',
+        hovertext=hover_text,
+        name=f'Nodo {nodo}'
+    ))
 
-# Aggiungi una leggenda per identificare i nodi
-ax.legend()
+# Add Earth sphere with WebGL surface rendering
+radius_earth = 6.371e6 - 1e5  # Earth radius in meters -100km
 
-# Aggiungi la sfera che rappresenta la Terra
-radius_earth = 6.371e6-1e5  # Raggio della Terra in metri -100km per evitare sovrapposizioni
+# Create sphere data
+phi, theta = np.mgrid[0:np.pi:50j, 0:2*np.pi:50j]
+x_sphere = radius_earth * np.sin(phi) * np.cos(theta)
+y_sphere = radius_earth * np.sin(phi) * np.sin(theta) 
+z_sphere = radius_earth * np.cos(phi)
 
-# Crea i dati per la sfera
-u = np.linspace(0, 2 * np.pi, 100)
-v = np.linspace(0, np.pi, 100)
-x_sphere = radius_earth * np.outer(np.cos(u), np.sin(v))
-y_sphere = radius_earth * np.outer(np.sin(u), np.sin(v))
-z_sphere = radius_earth * np.outer(np.ones(np.size(u)), np.cos(v))
+fig.add_trace(go.Surface(
+    x=x_sphere,
+    y=y_sphere,
+    z=z_sphere,
+    colorscale=[[0, 'darkgreen'], [1, 'darkgreen']],
+    showscale=False,
+    showlegend=False,
+    hoverinfo='skip',
+    opacity=0.3,
+    name='Terra'
+))
 
-# Plot della sfera
-ax.plot_surface(x_sphere, y_sphere, z_sphere, color='green', alpha=0.7, label='Terra')
 
-# Imposta aspect ratio uguale per tutti gli assi per mostrare una sfera perfetta
-ax.set_box_aspect([1,1,1])
+# Configure layout for optimal GPU rendering
+fig.update_layout(
+    title='Visualizzazione 3D dei Punti',
+    scene=dict(
+        xaxis_title='Asse X',
+        yaxis_title='Asse Y', 
+        zaxis_title='Asse Z',
+        aspectmode='data',  # Equal aspect ratio
+        xaxis=dict(showspikes=False),
+        yaxis=dict(showspikes=False),
+        zaxis=dict(showspikes=False)
+    ),
+)
 
-# Imposta le etichette degli assi
-ax.set_xlabel('Asse X')
-ax.set_ylabel('Asse Y')
-ax.set_zlabel('Asse Z')
+# Show with GPU-accelerated WebGL rendering
+print("Rendering 3D visualization with GPU acceleration (WebGL)...")
+print("Opening browser for interactive visualization...")
 
-# Imposta un titolo per il grafico
-ax.set_title('Visualizzazione 3D dei Punti')
+fig.show(renderer='browser')  # Forces browser rendering with WebGL
 
-# Mostra il grafico
-plt.show()
-
-# Puoi anche salvare il grafico come immagine
-# plt.savefig('grafico_punti_3d.png'):
+# Save as interactive HTML with GPU rendering
+print("Saving interactive HTML file...")
+fig.write_html("grafico_3d_gpu.html")
+print("Visualization complete! File saved as 'grafico_3d_gpu.html'")

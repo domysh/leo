@@ -43,6 +43,14 @@ DotProduct (const Vector3D &l, const Vector3D &r)
   return (l.x* r.x) + (l.y*r.y) + (l.z*r.z);
 }
 
+Vector
+CartesianToTopocentric (const Vector &v, const Vector &referencePoint, GeographicPositions::EarthSpheroidType sphereType)
+{
+  // Convert Cartesian coordinates to topocentric coordinates
+  Vector3D geo = GeographicPositions::CartesianToGeographicCoordinates(v, sphereType);
+  return GeographicPositions::GeographicToTopocentricCoordinates(geo, referencePoint, sphereType);
+}
+
 std::ostream &operator << (std::ostream &os, const LeoOrbit &orbit)
 {
   os << orbit.alt << ":" << orbit.inc << ":" << orbit.planes << ":" << orbit.sats;

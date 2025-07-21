@@ -9,18 +9,27 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("LeoCarMoveTraceExample");
 
+static std::ofstream traceFileOutputStream;
+static std::ostream* traceStream;
+
 void CourseChange (std::string context, Ptr<const MobilityModel> position)
 {
-  Vector pos = position->GetPosition ();
-  Ptr<const Node> node = position->GetObject<Node> ();
-  std::cout << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << position->GetVelocity ().GetLength() << std::endl;
+  auto mobility = DynamicCast<const GeocentricConstantPositionMobilityModel> (position);
+  if (mobility)
+    {
+      auto geoPos = mobility->GetGeographicPosition();
+      auto pos = GeographicPositions::GeographicToCartesianCoordinates(geoPos.x, geoPos.y, geoPos.z, GeographicPositions::SPHERE);
+      Ptr<const Node> node = position->GetObject<Node> ();
+      std::cout << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << std::endl;
+    }
+
 }
 
 int main(int argc, char *argv[])
 {
   CommandLine cmd;
   std::string orbitFile;
-  std::string traceFile;
+  std::string traceFile = "";
   std::string duration = "60s";
   double carSpeed = 30.0;  // m/s
   double carLatitude = 0.0;
@@ -57,21 +66,26 @@ int main(int argc, char *argv[])
   Config::Connect ("/NodeList/*/$ns3::MobilityModel/CourseChange",
                    MakeCallback (&CourseChange));
 
-  std::streambuf *coutbuf = std::cout.rdbuf();
   // redirect cout if traceFile is specified
-  std::ofstream out;
-  out.open (traceFile);
-  if (out.is_open ())
-    {
-      std::cout.rdbuf(out.rdbuf());
+  if (!traceFile.empty())
+  {
+    traceFileOutputStream.open (traceFile);
+    if (!traceFileOutputStream.is_open()) {
+      NS_FATAL_ERROR ("Could not open trace file " << traceFile);
+      return 1;
     }
-
-  std::cout << "Time,Node,X,Y,Z,Speed" << std::endl;
+    traceStream = &traceFileOutputStream;
+  }else{
+    // Use cout when no file is specified
+    traceStream = &std::cout;
+  }
+  *traceStream << "Time,Node,X,Y,Z,Speed" << std::endl;
 
   Simulator::Stop (Time (duration));
   Simulator::Run ();
   Simulator::Destroy ();
 
-  out.close ();
-  std::cout.rdbuf(coutbuf);
+  if (!traceFile.empty()) {
+    traceFileOutputStream.close();
+  }
 }

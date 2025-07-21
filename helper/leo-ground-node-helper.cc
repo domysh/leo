@@ -26,7 +26,7 @@
 #include "ns3/double.h"
 #include "ns3/uinteger.h"
 #include "ns3/mobility-helper.h"
-
+#include "ns3/geographic-positions.h"
 #include "leo-ground-node-helper.h"
 
 using namespace std;
@@ -100,9 +100,9 @@ LeoGndNodeHelper::GetEarthPosition (const LeoLatLong &loc)
 {
   double lat = loc.latitude * (M_PI / 90);
   double lon = loc.longitude * (M_PI / 180);
-  Vector3D pos = Vector3D (LEO_GND_RAD_EARTH * sin (lat) * cos (lon),
-  			   LEO_GND_RAD_EARTH * sin (lat) * sin (lon),
-  			   LEO_GND_RAD_EARTH * cos (lat));
+  Vector3D pos = Vector3D (GeographicPositions::EARTH_SPHERE_RADIUS * sin (lat) * cos (lon),
+  			   GeographicPositions::EARTH_SPHERE_RADIUS * sin (lat) * sin (lon),
+  			   GeographicPositions::EARTH_SPHERE_RADIUS * cos (lat));
   return pos;
 }
 

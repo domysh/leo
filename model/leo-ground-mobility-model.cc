@@ -20,6 +20,7 @@
 
 #include "ns3/double.h"
 #include "ns3/simulator.h"
+#include "ns3/geographic-positions.h"
 #include "leo-orbit.h"
 #include "leo-ground-mobility-model.h"
 
@@ -33,15 +34,14 @@ TypeId
 GndConstantVelocityMobilityModel::GetTypeId ()
 {
   static TypeId tid = TypeId ("ns3::GndConstantVelocityMobilityModel")
-    .SetParent<MobilityModel> ()
+    .SetParent<GeocentricConstantPositionMobilityModel> ()
     .SetGroupName ("Leo")
     .AddConstructor<GndConstantVelocityMobilityModel> ()
-    // TODO check value limits
     .AddAttribute ("Precision",
-                   "The time precision with which to compute position updates. 0 means arbitrary precision",
-                   TimeValue (Seconds (1)),
-                   MakeTimeAccessor (&GndConstantVelocityMobilityModel::m_precision),
-                   MakeTimeChecker ())
+                "The time precision with which to compute position updates. 0 means arbitrary precision",
+                TimeValue (Seconds (1)),
+                MakeTimeAccessor (&GndConstantVelocityMobilityModel::m_precision),
+                MakeTimeChecker ())
     .AddAttribute ("Altitude",
                      "A height from the earth's surface in meters",
                         DoubleValue (0.0),
@@ -72,7 +72,7 @@ GndConstantVelocityMobilityModel::GetTypeId ()
 }
 
 GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel()
-: MobilityModel (),
+: GeocentricConstantPositionMobilityModel (),
   m_initialLatitude(0.0),
   m_initialLongitude(0.0),
   m_altitude(0.0),
@@ -82,26 +82,6 @@ GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel()
 {
   NS_LOG_FUNCTION (this);
   Update(); // Initialize position
-}
-
-GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel(
-    double initialLatitude, double initialLongitude,
-    double altitude, double azimuth, double velocity,
-    Time precision
-): MobilityModel (),
-   m_initialLatitude(initialLatitude),
-   m_initialLongitude(initialLongitude),
-   m_altitude(altitude),
-   m_azimuth(azimuth),
-   m_velocity(velocity),
-   m_precision(precision)
-{
-  NS_LOG_FUNCTION (this << initialLatitude << initialLongitude << altitude << azimuth << velocity << precision);
-  Update(); // Initialize position
-}
-
-GndConstantVelocityMobilityModel::~GndConstantVelocityMobilityModel()
-{
 }
 
 double
@@ -127,45 +107,6 @@ void
 GndConstantVelocityMobilityModel::SetAzimuth (double azimuth)
 {
   m_azimuth = azimuth;
-  Update();
-}
-
-double
-GndConstantVelocityMobilityModel::GetAltitude () const
-{
-  return m_altitude;
-}
-
-void
-GndConstantVelocityMobilityModel::SetAltitude (double altitude)
-{
-  m_altitude = altitude;
-  Update();
-}
-
-double
-GndConstantVelocityMobilityModel::GetInitialLatitude () const
-{
-  return m_initialLatitude;
-}
-
-void
-GndConstantVelocityMobilityModel::SetInitialLatitude (double latitude)
-{
-  m_initialLatitude = latitude;
-  Update();
-}
-
-double
-GndConstantVelocityMobilityModel::GetInitialLongitude () const
-{
-  return m_initialLongitude;
-}
-
-void
-GndConstantVelocityMobilityModel::SetInitialLongitude (double longitude)
-{
-  m_initialLongitude = longitude;
   Update();
 }
 
@@ -201,7 +142,7 @@ GndConstantVelocityMobilityModel::CalcPosition (Time t) const
   double distance = m_velocity * timeSeconds;
   
   // Convert to angular displacement on Earth's surface
-  double earthRadius = (LEO_EARTH_RAD_KM * 1000.0) + m_altitude; // in meters
+  double earthRadius = GeographicPositions::EARTH_SPHERE_RADIUS + m_altitude; // in meters
   double angularDistance = distance / earthRadius; // in radians
   
   // Convert initial position to radians
@@ -257,8 +198,9 @@ GndConstantVelocityMobilityModel::DoGetPosition (void) const
 void
 GndConstantVelocityMobilityModel::DoSetPosition (const Vector &position)
 {
+  // Update our internal geographic position
   // Convert Cartesian position back to lat/lon (simplified)
-  double earthRadius = (LEO_EARTH_RAD_KM * 1000.0) + m_altitude; // in meters
+  double earthRadius = GeographicPositions::EARTH_SPHERE_RADIUS + m_altitude; // in meters
   double x = position.x;
   double y = position.y;
   double z = position.z;
@@ -270,6 +212,100 @@ GndConstantVelocityMobilityModel::DoSetPosition (const Vector &position)
   m_initialLongitude = lon * 180.0 / M_PI;
   
   Update ();
+}
+
+Vector
+GndConstantVelocityMobilityModel::DoGetGeographicPosition() const
+{
+  // Convert from topocentric to geographic coordinates
+  return GeographicPositions::TopocentricToGeographicCoordinates(
+      DoGetPosition(),
+      GetCoordinateTranslationReferencePoint(),
+      GeographicPositions::SPHERE
+    );
+}
+
+void
+GndConstantVelocityMobilityModel::DoSetGeographicPosition(const Vector& latLonAlt)
+{
+  NS_ASSERT_MSG((latLonAlt.x >= -90) && (latLonAlt.x <= 90),
+                "Latitude must be between -90 deg and +90 deg");
+  NS_ASSERT_MSG(latLonAlt.z >= 0, "Altitude must be higher or equal than 0 meters");
+   // TODO FIX
+   /*
+  m_initialLatitude = latLonAlt.x;
+  m_initialLongitude = latLonAlt.y;
+  m_altitude = latLonAlt.z;
+  */
+  
+  Update();
+}
+
+Vector
+GndConstantVelocityMobilityModel::DoGetGeocentricPosition() const
+{
+  Vector geographicPos = DoGetGeographicPosition();
+  return GeographicPositions::GeographicToCartesianCoordinates(
+    geographicPos.x, geographicPos.y, geographicPos.z, 
+    GeographicPositions::SPHERE);
+}
+
+void
+GndConstantVelocityMobilityModel::DoSetGeocentricPosition(const Vector& position)
+{
+  Vector geographicCoordinates = GeographicPositions::CartesianToGeographicCoordinates(
+    position, GeographicPositions::SPHERE);
+  DoSetGeographicPosition(geographicCoordinates);
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetGeographicPosition() const
+{
+  return DoGetGeographicPosition();
+}
+
+void
+GndConstantVelocityMobilityModel::SetGeographicPosition(const Vector& latLonAlt)
+{
+  DoSetGeographicPosition(latLonAlt);
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetGeocentricPosition() const
+{
+  return DoGetGeocentricPosition();
+}
+
+void
+GndConstantVelocityMobilityModel::SetGeocentricPosition(const Vector& position)
+{
+  DoSetGeocentricPosition(position);
+}
+
+void
+GndConstantVelocityMobilityModel::SetCoordinateTranslationReferencePoint(const Vector& refPoint)
+{
+  // Use base class implementation
+  GeocentricConstantPositionMobilityModel::SetCoordinateTranslationReferencePoint(refPoint);
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetCoordinateTranslationReferencePoint() const
+{
+  // Use base class implementation
+  return GeocentricConstantPositionMobilityModel::GetCoordinateTranslationReferencePoint();
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetPosition() const
+{
+  return DoGetPosition();
+}
+
+void
+GndConstantVelocityMobilityModel::SetPosition(const Vector& position)
+{
+  DoSetPosition(position);
 }
 
 } // namespace ns3

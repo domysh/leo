@@ -21,7 +21,7 @@
 #include "ns3/double.h"
 #include "ns3/uinteger.h"
 #include "ns3/log.h"
-
+#include "ns3/geographic-positions.h"
 #include "leo-polar-position-allocator.h"
 
 namespace ns3 {
@@ -73,9 +73,9 @@ LeoPolarPositionAllocator::GetNext () const
 
   double lat = m_lat * (M_PI / m_latNum);
   double lon = m_lon * (2 * M_PI / m_lonNum);
-  Vector3D next = Vector3D (LEO_GND_RAD_EARTH * sin (lat) * cos (lon),
-  			   LEO_GND_RAD_EARTH * sin (lat) * sin (lon),
-  			   LEO_GND_RAD_EARTH * cos (lat));
+  Vector3D next = Vector3D (GeographicPositions::EARTH_SPHERE_RADIUS * sin (lat) * cos (lon),
+  			   GeographicPositions::EARTH_SPHERE_RADIUS * sin (lat) * sin (lon),
+  			   GeographicPositions::EARTH_SPHERE_RADIUS * cos (lat));
 
   m_lat ++;
   if (m_lat > m_latNum)

@@ -23,6 +23,7 @@
 #include "ns3/object.h"
 #include "ns3/log.h"
 #include "ns3/mobility-model.h"
+#include "ns3/geocentric-constant-position-mobility-model.h"
 #include "ns3/nstime.h"
 
 /**
@@ -31,9 +32,6 @@
  *
  * Declaration of GndConstantVelocityMobilityModel
  */
-
-#define LEO_EARTH_RAD_KM 6371.0090
-#define LEO_EARTH_GM_KM_E10 39.8600436
 
 namespace ns3 {
 
@@ -46,7 +44,7 @@ namespace ns3 {
  * The node will move with constant speed in the direction of the velocity vector
  * around the Earth.
  */
-class GndConstantVelocityMobilityModel : public MobilityModel
+class GndConstantVelocityMobilityModel : public GeocentricConstantPositionMobilityModel
 {
 public:
   /**
@@ -57,34 +55,14 @@ public:
   
   /// Default constructor  
   GndConstantVelocityMobilityModel ();
-  
-  /// Parameterized constructor
-  GndConstantVelocityMobilityModel (
-        double initialLatitude, double initialLongitude,
-        double altitude, double azimuth, double velocity,
-        Time precision = Seconds(1)
-  );
   /// destructor
-  virtual ~GndConstantVelocityMobilityModel ();
-
-    /**
-     * @brief Computes elevation angle between a ground terminal and a HAPS/Satellite.
-     * After calculating the plane perpendicular to a cartesian position vector,
-     * the elevation angle is calculated using
-     * https://www.w3schools.blog/angle-between-a-line-and-a-plane.
-     * The altitude of the position passed as a parameter must be higher than that of the reference
-     * point.
-     * @param other pointer to the HAPS/satellite mobility model
-     * @return the elevation angle
-     * in degrees
-     */
-    virtual double GetElevationAngle(Ptr<const GeocentricConstantPositionMobilityModel> other);
+  virtual ~GndConstantVelocityMobilityModel () = default;
  
     /**
      * @brief Get the position using geographic (geodetic) coordinates
      * @return Vector containing (latitude (degree), longitude (degree), altitude (meter))
      */
-    virtual Vector GetGeographicPosition() const;
+    virtual Vector GetGeographicPosition() const override;
  
     /**
      * @brief Set the position using geographic coordinates
@@ -97,41 +75,41 @@ public:
      * +inf[, respectively. These assumptions are enforced with an assert for the latitude and the
      * altitude, while the longitude is normalized to the expected range.
      */
-    virtual void SetGeographicPosition(const Vector& latLonAlt);
+    virtual void SetGeographicPosition(const Vector& latLonAlt) override;
  
     /**
      * @brief Get the position using Geocentric Cartesian coordinates
      * @return Vector containing (x, y, z) (meter) coordinates
      */
-    virtual Vector GetGeocentricPosition() const;
+    virtual Vector GetGeocentricPosition() const override;
  
     /**
      * @brief Set the position using Geocentric Cartesian coordinates
      * @param position pointer to a Vector containing (x, y, z) (meter) coordinates
      */
-    virtual void SetGeocentricPosition(const Vector& position);
+    virtual void SetGeocentricPosition(const Vector& position) override;
  
     /**
      * @brief Set the reference point for coordinate conversion
      * @param refPoint vector containing the geographic reference point (meter)
      */
-    virtual void SetCoordinateTranslationReferencePoint(const Vector& refPoint);
+    virtual void SetCoordinateTranslationReferencePoint(const Vector& refPoint) override;
  
     /**
      * @brief Get the reference point for coordinate conversion
      * @return Vector containing geographic reference point (meter)
      */
-    virtual Vector GetCoordinateTranslationReferencePoint() const;
+    virtual Vector GetCoordinateTranslationReferencePoint() const override;
  
     /**
      * @return the current position
      */
-    virtual Vector GetPosition() const;
+    virtual Vector GetPosition() const override;
  
     /**
      * @param position the position to set.
      */
-    virtual void SetPosition(const Vector& position);
+    virtual void SetPosition(const Vector& position) override;
 
 private:
 
@@ -149,7 +127,7 @@ private:
    * The altitude of the node in meters above the Earth's surface.
    */
   double m_altitude;
-  
+
   /**
    * The direction of the velocity vector
    */
@@ -170,18 +148,16 @@ private:
    */
   Time m_precision;
 
-  /**
-   * \return the current position.
-   */
-  virtual Vector DoGetPosition (void) const;
-  /**
-   * \param position the position to set.
-   */
-  virtual void DoSetPosition (const Vector &position);
-  /**
-   * \return the current velocity.
-   */
-  virtual Vector DoGetVelocity (void) const;
+  Time lastPositionUpdate; ///< Last time the position was updated
+
+  // Override methods from GeocentricConstantPositionMobilityModel
+  virtual Vector DoGetPosition() const override;
+  virtual void DoSetPosition(const Vector& position) override;
+  virtual Vector DoGetVelocity() const override;
+  virtual Vector DoGetGeographicPosition() const override;
+  virtual void DoSetGeographicPosition(const Vector& latLonAlt) override;
+  virtual Vector DoGetGeocentricPosition() const override;
+  virtual void DoSetGeocentricPosition(const Vector& position) override;
 
   /**
    * \brief Calculate the position at time t
@@ -202,18 +178,6 @@ private:
    */
   void SetAzimuth (double azimuth);
 
-  /**
-   * \brief Get the altitude of the node
-   * \return altitude in meters above the Earth's surface
-   */
-  double GetAltitude () const;
-
-  /**
-   * \brief Set the altitude of the node
-   * \param altitude in meters above the Earth's surface
-   */
-  void SetAltitude (double altitude);
-
     /**
    * \brief Get the velocity of the node
    * \return velocity in m/s
@@ -224,31 +188,7 @@ private:
    * \brief Set the velocity of the node
    * \param velocity in m/s
    */
-  void SetVelocity (double velocity);
-
-  /**
-   * \brief Get the initial latitude
-   * \return latitude in degrees
-   */
-  double GetInitialLatitude () const;
-
-  /**
-   * \brief Set the initial latitude
-   * \param latitude in degrees
-   */
-  void SetInitialLatitude (double latitude);
-
-  /**
-   * \brief Get the initial longitude
-   * \return longitude in degrees
-   */
-  double GetInitialLongitude () const;
-
-  /**
-   * \brief Set the initial longitude
-   * \param longitude in degrees
-   */
-  void SetInitialLongitude (double longitude);
+  void SetVelocity(double velocity);
 
   /**
    * \brief Update the internal position of the mobility model

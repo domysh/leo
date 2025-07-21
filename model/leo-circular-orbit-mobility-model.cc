@@ -20,9 +20,10 @@
 
 #include "ns3/double.h"
 #include "ns3/simulator.h"
-
+#include "ns3/geographic-positions.h"
 #include "leo-circular-orbit-mobility-model.h"
 #include "leo-orbit.h"
+#include "ns3/angles.h"
 
 namespace ns3 {
 
@@ -34,7 +35,7 @@ TypeId
 LeoCircularOrbitMobilityModel::GetTypeId ()
 {
   static TypeId tid = TypeId ("ns3::LeoCircularOrbitMobilityModel")
-    .SetParent<MobilityModel> ()
+    .SetParent<GeocentricConstantPositionMobilityModel> ()
     .SetGroupName ("Leo")
     .AddConstructor<LeoCircularOrbitMobilityModel> ()
     .AddAttribute ("Altitude",
@@ -59,7 +60,7 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
   return tid;
 }
 
-LeoCircularOrbitMobilityModel::LeoCircularOrbitMobilityModel() : MobilityModel (), m_longitude (0.0), m_offset (0.0), m_position ()
+LeoCircularOrbitMobilityModel::LeoCircularOrbitMobilityModel() : GeocentricConstantPositionMobilityModel (), m_longitude (0.0), m_offset (0.0), m_position ()
 {
   NS_LOG_FUNCTION_NOARGS ();
 }
@@ -75,12 +76,18 @@ LeoCircularOrbitMobilityModel::GetSpeed () const
 }
 
 Vector
-LeoCircularOrbitMobilityModel::DoGetVelocity () const
+LeoCircularOrbitMobilityModel::DoGetGeocentricVelocity () const
 {
   Vector3D pos = DoGetPosition ();
   pos = Vector3D (pos.x / pos.GetLength (), pos.y / pos.GetLength (), pos.z / pos.GetLength ());
   Vector3D heading = CrossProduct (PlaneNorm (), pos);
   return Product (GetSpeed (), heading);
+}
+
+Vector
+LeoCircularOrbitMobilityModel::DoGetVelocity () const
+{
+  return CartesianToTopocentric (DoGetGeocentricVelocity (), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
 }
 
 Vector3D
@@ -95,7 +102,6 @@ LeoCircularOrbitMobilityModel::PlaneNorm () const
 double
 LeoCircularOrbitMobilityModel::GetProgress (Time t) const
 {
-  // TODO use nanos or ms instead? does it give higher precision?
   int sign = 1;
   // ensure correct gradient (not against earth rotation)
   if (m_inclination > M_PI/2)
@@ -103,7 +109,7 @@ LeoCircularOrbitMobilityModel::GetProgress (Time t) const
       sign = -1;
     }
   // 2pi * (distance travelled / circumference of earth) + offset
-  return sign * (((GetSpeed () * t.GetSeconds ()) / (LEO_EARTH_RAD_KM * 1000))) + m_offset;
+  return sign * (((GetSpeed () * t.GetSeconds ()) / GeographicPositions::EARTH_SPHERE_RADIUS)) + m_offset;
 }
 
 Vector3D
@@ -117,9 +123,9 @@ LeoCircularOrbitMobilityModel::RotatePlane (double a, const Vector3D &x) const
 }
 
 double
-LeoCircularOrbitMobilityModel::CalcLatitude () const
+LeoCircularOrbitMobilityModel::CalcLatitude() const
 {
-  return m_longitude + ((Simulator::Now ().GetDouble () / Hours (24).GetDouble ()) * 2 * M_PI);
+  return m_longitude + ((Simulator::Now().GetDouble () / Hours (24).GetDouble ()) * 2 * M_PI);
 }
 
 Vector
@@ -150,12 +156,7 @@ Vector LeoCircularOrbitMobilityModel::Update ()
 Vector
 LeoCircularOrbitMobilityModel::DoGetPosition (void) const
 {
-  if (m_precision == Time (0))
-    {
-      // Notice: NotifyCourseChange () will not be called
-      return CalcPosition (Simulator::Now ());
-    }
-  return m_position;
+  return CartesianToTopocentric(DoGetGeocentricPosition(), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
 }
 
 void
@@ -164,33 +165,79 @@ LeoCircularOrbitMobilityModel::DoSetPosition (const Vector &position)
   // use first element of position vector as latitude, second for longitude
   // this works nicely with MobilityHelper and GetPostion will still get the
   // correct position, but be aware that it will not be the same as supplied to
-  // SetPostion
+  // SetPostion (see LeoCircularOrbitPostionAllocator to understand how it works)
   m_longitude = position.x;
   m_offset = position.y;
   Update ();
+  // WARN this method is not standard compliant, it does not set the position
+  // Could be considered to manage the allocation of satellite positions
+  // in a different way than passing values in this way
 }
 
 double LeoCircularOrbitMobilityModel::GetAltitude () const
 {
-  return m_orbitHeight - LEO_EARTH_RAD_KM;
+  return m_orbitHeight - GeographicPositions::EARTH_SPHERE_RADIUS/1000.0;
 }
 
 void LeoCircularOrbitMobilityModel::SetAltitude (double h)
 {
-  m_orbitHeight = LEO_EARTH_RAD_KM + h;
+  m_orbitHeight = GeographicPositions::EARTH_SPHERE_RADIUS/1000.0 + h;
   Update ();
 }
 
 double LeoCircularOrbitMobilityModel::GetInclination () const
 {
-  return (m_inclination / M_PI) * 180.0;
+  return RadiansToDegrees(m_inclination);
 }
 
 void LeoCircularOrbitMobilityModel::SetInclination (double incl)
 {
   NS_ASSERT_MSG (incl != 0.0, "Plane must not be orthogonal to axis");
-  m_inclination = (incl / 180.0) * M_PI;
+  m_inclination = DegreesToRadians(incl);
   Update ();
+}
+
+// GeocentricConstantPositionMobilityModel interface implementation
+Vector
+LeoCircularOrbitMobilityModel::DoGetGeographicPosition() const
+{
+  // Convert ECEF position to geographic coordinates
+  Vector ecefPos = DoGetPosition();
+  return GeographicPositions::CartesianToGeographicCoordinates(ecefPos, GeographicPositions::SPHERE);
+}
+
+void
+LeoCircularOrbitMobilityModel::DoSetGeographicPosition(const Vector& latLonAlt)
+{
+  NS_ASSERT_MSG((latLonAlt.x >= -90) && (latLonAlt.x <= 90),
+                "Latitude must be between -90 deg and +90 deg");
+  NS_ASSERT_MSG(latLonAlt.z >= 0, "Altitude must be higher or equal than 0 meters");
+
+  // Convert geographic to orbital parameters (simplified)
+  m_longitude = DegreesToRadians(latLonAlt.y);
+  m_offset = DegreesToRadians(latLonAlt.x);
+  m_orbitHeight = GeographicPositions::EARTH_SPHERE_RADIUS/1000.0 + (latLonAlt.z / 1000.0); // altitude in km from center
+  Update();
+}
+
+Vector
+LeoCircularOrbitMobilityModel::DoGetGeocentricPosition() const
+{
+    if (m_precision == Time (0))
+    {
+      // Notice: NotifyCourseChange () will not be called
+      return CalcPosition (Simulator::Now ());
+    }
+    return m_position;
+}
+
+void
+LeoCircularOrbitMobilityModel::DoSetGeocentricPosition(const Vector& position)
+{
+  // Convert ECEF to geographic, then set
+  Vector geographicCoordinates = GeographicPositions::CartesianToGeographicCoordinates(
+    position, GeographicPositions::SPHERE);
+  DoSetGeographicPosition(geographicCoordinates);
 }
 
 };

@@ -21,8 +21,6 @@
 
 #include "ns3/position-allocator.h"
 
-#define LEO_GND_RAD_EARTH 6.371e6
-
 /**
  * \file
  * \ingroup leo
