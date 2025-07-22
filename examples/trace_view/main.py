@@ -24,6 +24,9 @@ whois = df["Node"]
 x = df['X']
 y = df['Y']
 z = df['Z']
+latitudes = df['Latitude']
+longitudes = df['Longitude']
+altitudes = df['Altitude']
 
 # Earth radius in meters
 EARTH_RADIUS = 6.371e6
@@ -37,37 +40,6 @@ def format_altitude(altitude_m):
         return f"{altitude_m/1000:.1f} km"
     else:
         return f"{altitude_m:.0f} m"
-
-# Function to convert ECEF coordinates to Lat/Lon/Alt
-def ecef_to_lla(x, y, z):
-    """
-    Convert ECEF (Earth-Centered, Earth-Fixed) coordinates to Latitude, Longitude, Altitude
-    """
-    # Calculate distance from Earth center
-    distance = np.sqrt(x**2 + y**2 + z**2)
-    
-    # Calculate latitude (in radians, then convert to degrees)
-    latitude_rad = np.arcsin(z / distance)
-    latitude_deg = np.degrees(latitude_rad)
-    
-    # Calculate longitude (in radians, then convert to degrees)  
-    longitude_rad = np.arctan2(y, x)
-    longitude_deg = np.degrees(longitude_rad)
-    
-    # Calculate altitude (distance from Earth surface)
-    altitude = distance - EARTH_RADIUS
-    
-    return latitude_deg, longitude_deg, altitude, distance
-
-# Calculate geographic coordinates for all points
-print("Converting ECEF coordinates to Lat/Lon/Alt...")
-latitudes, longitudes, altitudes, distances = ecef_to_lla(x.values, y.values, z.values)
-
-# Add geographic data to dataframe
-df['Latitude'] = latitudes
-df['Longitude'] = longitudes  
-df['Altitude'] = altitudes
-df['Distance_from_center'] = distances
 
 # Check for points below Earth surface
 underground_mask = altitudes < 0

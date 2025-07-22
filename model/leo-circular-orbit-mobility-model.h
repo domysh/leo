@@ -86,6 +86,17 @@ public:
    */
   void SetInclination (double incl);
 
+  /**
+   * \brief Get velocity
+   * \return the current velocity
+   */
+  Vector GetVelocity () const;
+  /**
+   * \brief Get geocentric velocity
+   * \return the current geocentric velocity
+   */
+  Vector GetGeocentricVelocity () const;
+
 private:
 
   /**

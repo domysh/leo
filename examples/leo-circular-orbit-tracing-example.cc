@@ -31,9 +31,10 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
   auto mobility = DynamicCast<const GeocentricConstantPositionMobilityModel> (position);
   if (mobility)
     {
-      auto geo = mobility->GetGeocentricPosition();
+      auto pos = mobility->GetGeocentricPosition();
+      auto geo = mobility->GetGeographicPosition();
       Ptr<const Node> node = position->GetObject<Node>();
-      std::cout << Simulator::Now () << "," << node->GetId () << "," << geo.x << "," << geo.y << "," << geo.z << "," << mobility->GetVelocity() << std::endl;
+      std::cout << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << "," << geo.x << "," << geo.y << "," << geo.z << std::endl;
     }
 
 }
@@ -73,8 +74,7 @@ int main(int argc, char *argv[])
     {
       std::cout.rdbuf(out.rdbuf());
     }
-
-  std::cout << "Time,Node,X,Y,Z,Speed" << std::endl;
+  std::cout << "Time,Node,X,Y,Z,Speed,Latitude,Longitude,Altitude" << std::endl;
 
   Simulator::Stop (Time (duration));
   Simulator::Run ();

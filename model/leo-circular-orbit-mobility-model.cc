@@ -78,7 +78,7 @@ LeoCircularOrbitMobilityModel::GetSpeed () const
 Vector
 LeoCircularOrbitMobilityModel::DoGetGeocentricVelocity () const
 {
-  Vector3D pos = DoGetPosition ();
+  Vector3D pos = DoGetGeocentricPosition ();
   pos = Vector3D (pos.x / pos.GetLength (), pos.y / pos.GetLength (), pos.z / pos.GetLength ());
   Vector3D heading = CrossProduct (PlaneNorm (), pos);
   return Product (GetSpeed (), heading);
@@ -87,7 +87,19 @@ LeoCircularOrbitMobilityModel::DoGetGeocentricVelocity () const
 Vector
 LeoCircularOrbitMobilityModel::DoGetVelocity () const
 {
-  return CartesianToTopocentric (DoGetGeocentricVelocity (), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
+  return CartesianToTopocentric (DoGetGeocentricVelocity(), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
+}
+
+Vector
+LeoCircularOrbitMobilityModel::GetVelocity () const
+{
+  return DoGetVelocity ();
+}
+
+Vector
+LeoCircularOrbitMobilityModel::GetGeocentricVelocity () const
+{
+  return DoGetGeocentricVelocity ();
 }
 
 Vector3D
@@ -202,7 +214,7 @@ Vector
 LeoCircularOrbitMobilityModel::DoGetGeographicPosition() const
 {
   // Convert ECEF position to geographic coordinates
-  Vector ecefPos = DoGetPosition();
+  Vector ecefPos = DoGetGeocentricPosition();
   return GeographicPositions::CartesianToGeographicCoordinates(ecefPos, GeographicPositions::SPHERE);
 }
 
