@@ -6,7 +6,6 @@ import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # GPU-accelerated 3D visualization using Plotly with WebGL rendering
-# This provides much better performance for large datasets
 
 try:
     print("Loading CSV data...")

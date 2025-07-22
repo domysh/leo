@@ -18,7 +18,7 @@ set(public_headers
     helper/satellite-node-helper.h
     model/leo-circular-orbit-mobility-model.h
     model/leo-circular-orbit-position-allocator.h
-    model/leo-ground-mobility-model.h
+    model/leo-gnd-constant-velocity-mobility-model.h
     model/leo-mock-channel.h
     model/leo-mock-net-device.h
     model/leo-oneweb-constants.h
@@ -46,7 +46,7 @@ set(sources
     helper/satellite-node-helper.cc
     model/leo-circular-orbit-mobility-model.cc
     model/leo-circular-orbit-position-allocator.cc
-    model/leo-ground-mobility-model.cc
+    model/leo-gnd-constant-velocity-mobility-model.cc
     model/leo-mock-channel.cc
     model/leo-mock-net-device.cc
     model/leo-orbit.cc

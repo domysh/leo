@@ -257,8 +257,8 @@ int main(int argc, char *argv[])
     bool logging = false; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
     double carSpeed = 30.0;  // m/s
-    double carLatitude = 0.0;
-    double carLongitude = 0.0;
+    double carLatitude = 19.5;
+    double carLongitude = 1.5;
     double txPower = 40; // txPower
     std::string duration = "5s";
     std::string traceFile = "";
