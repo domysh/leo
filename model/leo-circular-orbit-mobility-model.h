@@ -90,12 +90,12 @@ public:
    * \brief Get velocity
    * \return the current velocity
    */
-  Vector GetVelocity () const;
+  virtual Vector GetVelocity () const;
   /**
    * \brief Get geocentric velocity
    * \return the current geocentric velocity
    */
-  Vector GetGeocentricVelocity () const;
+  virtual Vector GetGeocentricVelocity () const;
 
 private:
 

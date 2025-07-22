@@ -23,6 +23,7 @@
 #include "ns3/geographic-positions.h"
 #include "leo-orbit.h"
 #include "leo-ground-mobility-model.h"
+#include "ns3/angles.h"
 
 namespace ns3 {
 
@@ -50,7 +51,7 @@ GndConstantVelocityMobilityModel::GetTypeId ()
     .AddAttribute ("Speed",
                         "The velocity of the node in m/s",
                         DoubleValue (0),
-                        MakeDoubleAccessor (&GndConstantVelocityMobilityModel::m_velocity),
+                        MakeDoubleAccessor (&GndConstantVelocityMobilityModel::m_speed),
                         MakeDoubleChecker<double> (0.0))
     .AddAttribute ("Azimuth",
                      "The azimuth of the velocity vector in degrees",
@@ -66,8 +67,10 @@ GndConstantVelocityMobilityModel::GetTypeId ()
                      "Initial longitude position in degrees",
                         DoubleValue (0.0),
                         MakeDoubleAccessor (&GndConstantVelocityMobilityModel::m_initialLongitude),
-                        MakeDoubleChecker<double> (-180.0, 180.0))
-    ;
+                        MakeDoubleChecker<double> (-180.0, 180.0));
+    TypeId::AttributeInformation notToUse;
+    tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
+    notToUse.supportLevel = TypeId::SupportLevel::OBSOLETE;
   return tid;
 }
 
@@ -77,7 +80,7 @@ GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel()
   m_initialLongitude(0.0),
   m_altitude(0.0),
   m_azimuth(0.0),
-  m_velocity(0.0),
+  m_speed(0.0),
   m_precision(Seconds(1))
 {
   NS_LOG_FUNCTION (this);
@@ -85,15 +88,15 @@ GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel()
 }
 
 double
-GndConstantVelocityMobilityModel::GetVelocity () const
+GndConstantVelocityMobilityModel::GetSpeed () const
 {
-  return m_velocity;
+  return m_speed;
 }
 
 void
-GndConstantVelocityMobilityModel::SetVelocity (double velocity)
+GndConstantVelocityMobilityModel::SetSpeed (double velocity)
 {
-  m_velocity = velocity;
+  m_speed = velocity;
   Update();
 }
 
@@ -111,16 +114,16 @@ GndConstantVelocityMobilityModel::SetAzimuth (double azimuth)
 }
 
 Vector
-GndConstantVelocityMobilityModel::DoGetVelocity () const
+GndConstantVelocityMobilityModel::DoGetGeocentricVelocity () const
 {
   // Convert spherical velocity to Cartesian coordinates
   // For ground movement, we need to compute velocity in local frame
-  double latRad = m_initialLatitude * M_PI / 180.0;
-  double azimuthRad = m_azimuth * M_PI / 180.0;
+  double latRad = DegreesToRadians(m_initialLatitude);
+  double azimuthRad = DegreesToRadians(m_azimuth);
   
   // Velocity components in local East-North-Up frame
-  double vEast = m_velocity * sin(azimuthRad);
-  double vNorth = m_velocity * cos(azimuthRad);
+  double vEast = m_speed * sin(azimuthRad);
+  double vNorth = m_speed * cos(azimuthRad);
   double vUp = 0.0; // Ground movement
   
   // Convert to ECEF coordinates (simplified approximation)
@@ -133,13 +136,32 @@ GndConstantVelocityMobilityModel::DoGetVelocity () const
 }
 
 Vector
+GndConstantVelocityMobilityModel::DoGetVelocity () const
+{
+  return CartesianToTopocentric (DoGetGeocentricVelocity(), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetVelocity () const
+{
+  return DoGetVelocity ();
+}
+
+Vector
+GndConstantVelocityMobilityModel::GetGeocentricVelocity () const
+{
+  return DoGetGeocentricVelocity ();
+}
+
+
+Vector
 GndConstantVelocityMobilityModel::CalcPosition (Time t) const
 {
   // Calculate current position based on initial position, velocity, azimuth and time
   double timeSeconds = t.GetSeconds();
   
   // Distance traveled
-  double distance = m_velocity * timeSeconds;
+  double distance = m_speed * timeSeconds;
   
   // Convert to angular displacement on Earth's surface
   double earthRadius = GeographicPositions::EARTH_SPHERE_RADIUS + m_altitude; // in meters
@@ -187,42 +209,23 @@ GndConstantVelocityMobilityModel::Update ()
 Vector
 GndConstantVelocityMobilityModel::DoGetPosition (void) const
 {
-  if (m_precision == Time (0))
-    {
-      // Notice: NotifyCourseChange () will not be called
-      return CalcPosition (Simulator::Now ());
-    }
-  return m_position;
+  return CartesianToTopocentric (DoGetGeocentricPosition(), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
 }
 
 void
 GndConstantVelocityMobilityModel::DoSetPosition (const Vector &position)
 {
-  // Update our internal geographic position
-  // Convert Cartesian position back to lat/lon (simplified)
-  double earthRadius = GeographicPositions::EARTH_SPHERE_RADIUS + m_altitude; // in meters
-  double x = position.x;
-  double y = position.y;
-  double z = position.z;
-  
-  double lat = asin(z / earthRadius);
-  double lon = atan2(y, x);
-  
-  m_initialLatitude = lat * 180.0 / M_PI;
-  m_initialLongitude = lon * 180.0 / M_PI;
-  
-  Update ();
+  auto geo = GeographicPositions::TopocentricToGeographicCoordinates(position, GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
+  DoSetGeographicPosition(geo);
 }
 
 Vector
 GndConstantVelocityMobilityModel::DoGetGeographicPosition() const
 {
   // Convert from topocentric to geographic coordinates
-  return GeographicPositions::TopocentricToGeographicCoordinates(
-      DoGetPosition(),
-      GetCoordinateTranslationReferencePoint(),
-      GeographicPositions::SPHERE
-    );
+  return GeographicPositions::CartesianToGeographicCoordinates(
+      DoGetGeocentricPosition(),GeographicPositions::SPHERE
+  );
 }
 
 void
@@ -231,23 +234,20 @@ GndConstantVelocityMobilityModel::DoSetGeographicPosition(const Vector& latLonAl
   NS_ASSERT_MSG((latLonAlt.x >= -90) && (latLonAlt.x <= 90),
                 "Latitude must be between -90 deg and +90 deg");
   NS_ASSERT_MSG(latLonAlt.z >= 0, "Altitude must be higher or equal than 0 meters");
-   // TODO FIX
-   /*
   m_initialLatitude = latLonAlt.x;
   m_initialLongitude = latLonAlt.y;
   m_altitude = latLonAlt.z;
-  */
-  
   Update();
 }
 
 Vector
 GndConstantVelocityMobilityModel::DoGetGeocentricPosition() const
 {
-  Vector geographicPos = DoGetGeographicPosition();
-  return GeographicPositions::GeographicToCartesianCoordinates(
-    geographicPos.x, geographicPos.y, geographicPos.z, 
-    GeographicPositions::SPHERE);
+  if (m_precision == Time (0))
+    {
+      return CalcPosition (Simulator::Now ());
+    }
+  return m_position;
 }
 
 void

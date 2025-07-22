@@ -28,9 +28,6 @@ latitudes = df['Latitude']
 longitudes = df['Longitude']
 altitudes = df['Altitude']
 
-# Earth radius in meters
-EARTH_RADIUS = 6.371e6
-
 # Function to format altitude with appropriate units
 def format_altitude(altitude_m):
     """
@@ -42,7 +39,7 @@ def format_altitude(altitude_m):
         return f"{altitude_m:.0f} m"
 
 # Check for points below Earth surface
-underground_mask = altitudes < 0
+underground_mask = altitudes < -0.01 # Threshold set to 0.01 m to avoid numerical errors
 underground_count = np.sum(underground_mask)
 
 if underground_count > 0:
@@ -106,7 +103,7 @@ for i, nodo in enumerate(nodi_unici):
     ))
 
 # Add Earth sphere with WebGL surface rendering
-radius_earth = 6.371e6 - 1e5  # Earth radius in meters -100km
+radius_earth = 6.371e6 - 10
 
 # Create sphere data
 phi, theta = np.mgrid[0:np.pi:50j, 0:2*np.pi:50j]

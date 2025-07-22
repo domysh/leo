@@ -105,6 +105,17 @@ public:
      * @return the current position
      */
     virtual Vector GetPosition() const override;
+
+      /**
+       * \brief Get velocity
+       * \return the current velocity
+       */
+      virtual Vector GetVelocity () const;
+      /**
+       * \brief Get geocentric velocity
+       * \return the current geocentric velocity
+       */
+      virtual Vector GetGeocentricVelocity () const;
  
     /**
      * @param position the position to set.
@@ -136,7 +147,7 @@ private:
   /**
    * The velocity of the node in m/s
    */
-   double m_velocity;
+   double m_speed;
 
   /**
    * Current position
@@ -153,11 +164,20 @@ private:
   // Override methods from GeocentricConstantPositionMobilityModel
   virtual Vector DoGetPosition() const override;
   virtual void DoSetPosition(const Vector& position) override;
-  virtual Vector DoGetVelocity() const override;
   virtual Vector DoGetGeographicPosition() const override;
   virtual void DoSetGeographicPosition(const Vector& latLonAlt) override;
   virtual Vector DoGetGeocentricPosition() const override;
   virtual void DoSetGeocentricPosition(const Vector& position) override;
+
+  /**
+   * \return the current velocity.
+   */
+  virtual Vector DoGetVelocity (void) const override;
+  /**
+   * \brief Get geographic velocity
+   * \return the current geographic velocity.
+   */
+  virtual Vector DoGetGeocentricVelocity() const;
 
   /**
    * \brief Calculate the position at time t
@@ -182,13 +202,13 @@ private:
    * \brief Get the velocity of the node
    * \return velocity in m/s
    */
-  double GetVelocity () const;
+  double GetSpeed () const;
 
   /**
    * \brief Set the velocity of the node
    * \param velocity in m/s
    */
-  void SetVelocity(double velocity);
+  void SetSpeed(double velocity);
 
   /**
    * \brief Update the internal position of the mobility model

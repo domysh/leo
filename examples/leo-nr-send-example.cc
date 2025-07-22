@@ -238,18 +238,23 @@ NS_LOG_COMPONENT_DEFINE ("LeoNrSendExample");
 
 void CourseChange (std::string context, Ptr<const MobilityModel> position)
 {
-  Vector pos = position->GetPosition ();
-  Ptr<const Node> node = position->GetObject<Node> ();
-  traceFileOutputStream << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << position->GetVelocity ().GetLength() << std::endl;
-}
+  auto mobility = DynamicCast<const GeocentricConstantPositionMobilityModel> (position);
+  if (mobility)
+    {
+      auto pos = mobility->GetGeocentricPosition();
+      auto geo = mobility->GetGeographicPosition();
+      Ptr<const Node> node = position->GetObject<Node>();
+      traceFileOutputStream << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << "," << geo.x << "," << geo.y << "," << geo.z << std::endl;
+    }
 
+}
 int main(int argc, char *argv[])
 {
 
     std::string scenario = "NTN-Suburban"; // scenario
     double frequency = 28e9;      // central frequency
     double bandwidth = 100e6;     // bandwidth
-    bool logging = true; // whether to enable logging from the simulation, another option is by
+    bool logging = false; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
     double carSpeed = 30.0;  // m/s
     double carLatitude = 0.0;
@@ -301,7 +306,7 @@ int main(int argc, char *argv[])
       }
       Config::Connect ("/NodeList/*/$ns3::MobilityModel/CourseChange",
                        MakeCallback (&CourseChange));
-      traceFileOutputStream << "Time,Node,X,Y,Z,Speed" << std::endl;
+      traceFileOutputStream << "Time,Node,X,Y,Z,Speed,Latitude,Longitude,Altitude" << std::endl;
     }
   if (logging)
     {
@@ -444,10 +449,10 @@ int main(int argc, char *argv[])
     std::cout << "Received packets: " << receivedPackets << std::endl;
     if (receivedPackets == 10)
     {
-        return EXIT_SUCCESS;
+        std::cout << "Test passed!" << std::endl;
     }
     else
     {
-        return EXIT_FAILURE;
+        std::cout << "Test failed! [Received packets: " << receivedPackets << " != 10]" << std::endl;
     }
 }

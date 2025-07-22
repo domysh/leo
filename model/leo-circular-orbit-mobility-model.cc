@@ -34,6 +34,8 @@ NS_OBJECT_ENSURE_REGISTERED (LeoCircularOrbitMobilityModel);
 TypeId
 LeoCircularOrbitMobilityModel::GetTypeId ()
 {
+  
+
   static TypeId tid = TypeId ("ns3::LeoCircularOrbitMobilityModel")
     .SetParent<GeocentricConstantPositionMobilityModel> ()
     .SetGroupName ("Leo")
@@ -55,8 +57,10 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
                    "The time precision with which to compute position updates. 0 means arbitrary precision",
                    TimeValue (Seconds (1)),
                    MakeTimeAccessor (&LeoCircularOrbitMobilityModel::m_precision),
-                   MakeTimeChecker ())
-    ;
+                   MakeTimeChecker ());
+    TypeId::AttributeInformation notToUse;
+    tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
+    notToUse.supportLevel = TypeId::SupportLevel::OBSOLETE;
   return tid;
 }
 

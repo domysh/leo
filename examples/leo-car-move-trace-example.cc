@@ -17,10 +17,10 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
   auto mobility = DynamicCast<const GeocentricConstantPositionMobilityModel> (position);
   if (mobility)
     {
-      auto geoPos = mobility->GetGeographicPosition();
-      auto pos = GeographicPositions::GeographicToCartesianCoordinates(geoPos.x, geoPos.y, geoPos.z, GeographicPositions::SPHERE);
-      Ptr<const Node> node = position->GetObject<Node> ();
-      std::cout << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << std::endl;
+      auto pos = mobility->GetGeocentricPosition();
+      auto geo = mobility->GetGeographicPosition();
+      Ptr<const Node> node = position->GetObject<Node>();
+      *traceStream << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << "," << geo.x << "," << geo.y << "," << geo.z << std::endl;
     }
 
 }
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
     // Use cout when no file is specified
     traceStream = &std::cout;
   }
-  *traceStream << "Time,Node,X,Y,Z,Speed" << std::endl;
+  *traceStream << "Time,Node,X,Y,Z,Speed,Latitude,Longitude,Altitude"<< std::endl;
 
   Simulator::Stop (Time (duration));
   Simulator::Run ();
