@@ -80,9 +80,15 @@ public:
    */
   void SetAttribute (std::string name, const AttributeValue &value);
 
+  Time GetPrecision () const;
+
+  void SetPrecision (Time precision);
+
 private:
   /// Factory for nodes
   ObjectFactory m_nodeFactory;
+  // Precision of the position allocator
+  Time m_precision = Seconds (1.0); // Default precision
 };
 
 }; // namespace ns3

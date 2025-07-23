@@ -27,9 +27,10 @@ static Ptr<ThreeGppSpectrumPropagationLossModel>
     m_spectrumLossModel;          //!< the SpectrumPropagationLossModel object
 static std::ofstream traceFileOutputStream;
 static std::ofstream resultsFile; //!< The results file
+static bool logging = false; // whether to enable logging from the simulation, another option is by
+                         // exporting the NS_LOG environment variable
 
-/*
-**
+/**
  * @brief Create the PSD for the TX
  *
  * @param fcHz the carrier frequency in Hz
@@ -38,7 +39,7 @@ static std::ofstream resultsFile; //!< The results file
  * @param rbWidthHz the Resource Block (RB) width in Hz
  *
  * @return the pointer to the PSD
- *
+*/
 Ptr<SpectrumValue>
 CreateTxPowerSpectralDensity(double fcHz, double pwrDbm, double bwHz, double rbWidthHz)
 {
@@ -72,11 +73,11 @@ CreateTxPowerSpectralDensity(double fcHz, double pwrDbm, double bwHz, double rbW
     return txPsd; // [W/Hz]
 }
  
-**
+/**
  * @brief A structure that holds the parameters for the
  * ComputeSnr function. In this way the problem with the limited
  * number of parameters of method Schedule is avoided.
- *
+ */
 struct ComputeSnrParams
 {
     Ptr<MobilityModel> txMob;        //!< the tx mobility model
@@ -89,7 +90,7 @@ struct ComputeSnrParams
     double bandwidth;                //!< the total bandwidth in Hz
     double resourceBlockBandwidth;   //!< the Resource Block bandwidth in Hz
  
-    **
+    /**
      * @brief Constructor
      * @param pTxMob the tx mobility model
      * @param pRxMob the rx mobility model
@@ -100,7 +101,7 @@ struct ComputeSnrParams
      * @param pFrequency the carrier frequency in Hz
      * @param pBandwidth the total bandwidth in Hz
      * @param pResourceBlockBandwidth the Resource Block bandwidth in Hz
-     *
+     */
     ComputeSnrParams(Ptr<MobilityModel> pTxMob,
                      Ptr<MobilityModel> pRxMob,
                      double pTxPow,
@@ -123,7 +124,7 @@ struct ComputeSnrParams
     }
 };
 
-**
+/**
  * @brief Create the noise PSD for the
  *
  * @param fcHz the carrier frequency in Hz
@@ -132,7 +133,7 @@ struct ComputeSnrParams
  * @param rbWidthHz the Resource Block (RB) width in Hz
  *
  * @return the pointer to the noise PSD
- *
+ */
 Ptr<SpectrumValue>
 CreateNoisePowerSpectralDensity(double fcHz, double noiseFigureDb, double bwHz, double rbWidthHz)
 {
@@ -172,11 +173,11 @@ CreateNoisePowerSpectralDensity(double fcHz, double noiseFigureDb, double bwHz, 
     return txPsd; // W/Hz
 }
 
-**
+/**
  * Compute the average SNR
  * @param params A structure that holds the parameters that are needed to perform calculations in
  * ComputeSnr
- *
+ */
 static void
 ComputeSnr(ComputeSnrParams& params)
 {
@@ -185,20 +186,25 @@ ComputeSnr(ComputeSnrParams& params)
                                                             params.bandwidth,
                                                             params.resourceBlockBandwidth);
     Ptr<SpectrumValue> rxPsd = txPsd->Copy();
-    NS_LOG_DEBUG("Average tx power " << 10 * log10(Sum(*txPsd) * params.resourceBlockBandwidth)
-                                     << " dB");
- 
+    if (logging){
+        std::cout << "Average tx power " << 10 * log10(Sum(*txPsd) * params.resourceBlockBandwidth) << " dB" << std::endl;
+    }
     // create the noise PSD
     Ptr<SpectrumValue> noisePsd = CreateNoisePowerSpectralDensity(params.frequency,
                                                                   params.noiseFigure,
                                                                   params.bandwidth,
                                                                   params.resourceBlockBandwidth);
-    NS_LOG_DEBUG("Average noise power "
-                 << 10 * log10(Sum(*noisePsd) * params.resourceBlockBandwidth) << " dB");
+    
+    if (logging){
+        std::cout << "Average noise power "
+                  << 10 * log10(Sum(*noisePsd) * params.resourceBlockBandwidth) << " dB" << std::endl;
+    }
  
     // apply the pathloss
     double propagationGainDb = m_propagationLossModel->CalcRxPower(0, params.txMob, params.rxMob);
-    NS_LOG_DEBUG("Pathloss " << -propagationGainDb << " dB");
+    if (logging){
+        std::cout << "Pathloss " << propagationGainDb << " dB" << std::endl;
+    }
     double propagationGainLinear = std::pow(10.0, (propagationGainDb) / 10.0);
     *(rxPsd) *= propagationGainLinear;
  
@@ -216,10 +222,10 @@ ComputeSnr(ComputeSnrParams& params)
                                                             params.rxMob,
                                                             params.txAntenna,
                                                             params.rxAntenna);
-    NS_LOG_DEBUG("Average rx power " << 10 * log10(Sum(*rxSsp->psd) * params.bandwidth) << " dB");
- 
-    // compute the SNR
-    NS_LOG_DEBUG("Average SNR " << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " dB");
+    if (logging){
+        std::cout << "Average rx power " << 10 * log10(Sum(*rxSsp->psd) * params.bandwidth) << " dB" << std::endl;
+        std::cout << "Average SNR " << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " dB" << std::endl;
+    }
  
     // print the SNR and pathloss values in the output file
     resultsFile << Simulator::Now().GetSeconds() << " "
@@ -227,8 +233,6 @@ ComputeSnr(ComputeSnrParams& params)
                 << std::endl;
 }
 
-
-*/
 
 // Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
 //
@@ -253,34 +257,111 @@ int main(int argc, char *argv[])
 
     std::string scenario = "NTN-Suburban"; // scenario
     double frequency = 28e9;      // central frequency
-    double bandwidth = 100e6;     // bandwidth
-    bool logging = false; // whether to enable logging from the simulation, another option is by
-                         // exporting the NS_LOG environment variable
+    double bandwidth = 400e6;     // bandwidth
+
     double carSpeed = 30.0;  // m/s
     double carLatitude = 19.5;
     double carLongitude = 1.5;
     double txPower = 40; // txPower
-    std::string duration = "5s";
+    double RbBandwidthHz = 120e3; // Hz
+    // Satellite parameters
+    double satEIRPDensity = 40;     // dBW/MHz
+    double satAntennaGainDb = 58.5; // dB
+    // UE Parameters
+    double vsatAntennaGainDb = 39.7; // dB
+    double vsatAntennaNoiseFigureDb = 1.2; // dB
+    std::string duration = "420ms";
     std::string traceFile = "";
+    std::string mobilityPrecision = "50ms"; // Precision for mobility updates
  
     CommandLine cmd(__FILE__);
     cmd.AddValue("scenario",
-                 "The scenario for the simulation. Choose among 'RMa', 'UMa', 'UMi', "
-                 "'InH-OfficeMixed', 'InH-OfficeOpen'.",
+                 "The scenario for the simulation. Valid options are: "
+                 "NTN-DenseUrban, NTN-Urban, NTN-Suburban, and NTN-Rural",
                  scenario);
     cmd.AddValue("frequency", "The central carrier frequency in Hz.", frequency);
+    cmd.AddValue("bandwidth", "The total bandwidth in Hz.", bandwidth);
     cmd.AddValue("carSpeed", "Speed of the car in m/s", carSpeed);
     cmd.AddValue("carLatitude", "Initial latitude of the car", carLatitude);
     cmd.AddValue("carLongitude", "Initial longitude of the car", carLongitude);
+    cmd.AddValue("satAntennaGainDb", "The satellite antenna gain in dB", satAntennaGainDb);
+    cmd.AddValue("vsatAntennaGainDb", "The UE VSAT antenna gain in dB", vsatAntennaGainDb);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
     cmd.AddValue("logging", "If set to 0, log components will be disabled.", logging);
     cmd.AddValue("duration", "Duration of the simulation in seconds", duration);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
+    cmd.AddValue("txPower", "Transmission power in dBm", txPower);
+    cmd.AddValue("vsatAntennaNoiseFigureDb",
+                "The UE VSAT antenna noise figure in dB",
+                vsatAntennaNoiseFigureDb);
     cmd.Parse(argc, argv);
+
+    // Calculate transmission power in dBm using EIRPDensity + 10*log10(Bandwidth) - AntennaGain +
+    // 30
+    double txPowDbm = (satEIRPDensity + 10 * log10(bandwidth / 1e6) - satAntennaGainDb) + 30;
+
+  Config::SetDefault("ns3::ThreeGppChannelModel::UpdatePeriod",
+                        TimeValue(MilliSeconds(10))); // update the channel at every 10 ms
+  Config::SetDefault("ns3::ThreeGppChannelConditionModel::UpdatePeriod",
+                        TimeValue(MilliSeconds(0))); // do not update the channel condition
+
+    //Useful to calculate SNR
+    // create and configure the factories for the channel condition and propagation loss models
+    ObjectFactory propagationLossModelFactory;
+    ObjectFactory channelConditionModelFactory;
+
+    // Start changes with respect to three-gpp-channel-example
+    if (scenario == "NTN-DenseUrban")
+    {
+        propagationLossModelFactory.SetTypeId(
+            ThreeGppNTNDenseUrbanPropagationLossModel::GetTypeId());
+        channelConditionModelFactory.SetTypeId(
+            ThreeGppNTNDenseUrbanChannelConditionModel::GetTypeId());
+    }
+    else if (scenario == "NTN-Urban")
+    {
+        propagationLossModelFactory.SetTypeId(ThreeGppNTNUrbanPropagationLossModel::GetTypeId());
+        channelConditionModelFactory.SetTypeId(ThreeGppNTNUrbanChannelConditionModel::GetTypeId());
+    }
+    else if (scenario == "NTN-Suburban")
+    {
+        propagationLossModelFactory.SetTypeId(ThreeGppNTNSuburbanPropagationLossModel::GetTypeId());
+        channelConditionModelFactory.SetTypeId(
+            ThreeGppNTNSuburbanChannelConditionModel::GetTypeId());
+    }
+    else if (scenario == "NTN-Rural")
+    {
+        propagationLossModelFactory.SetTypeId(ThreeGppNTNRuralPropagationLossModel::GetTypeId());
+        channelConditionModelFactory.SetTypeId(ThreeGppNTNRuralChannelConditionModel::GetTypeId());
+    }
+    else
+    {
+        NS_FATAL_ERROR("Unknown NTN scenario");
+    }
+    // End changes with respect to three-gpp-channel-example
+ 
+    // create the propagation loss model
+    m_propagationLossModel = propagationLossModelFactory.Create<ThreeGppPropagationLossModel>();
+    m_propagationLossModel->SetAttribute("Frequency", DoubleValue(frequency));
+    m_propagationLossModel->SetAttribute("ShadowingEnabled", BooleanValue(true));
+ 
+    // create the spectrum propagation loss model
+    m_spectrumLossModel = CreateObject<ThreeGppSpectrumPropagationLossModel>();
+    m_spectrumLossModel->SetChannelModelAttribute("Frequency", DoubleValue(frequency));
+    m_spectrumLossModel->SetChannelModelAttribute("Scenario", StringValue(scenario));
+ 
+    // create the channel condition model and associate it with the spectrum and
+    // propagation loss model
+    Ptr<ChannelConditionModel> condModel =
+        channelConditionModelFactory.Create<ThreeGppChannelConditionModel>();
+    m_spectrumLossModel->SetChannelModelAttribute("ChannelConditionModel", PointerValue(condModel));
+    m_propagationLossModel->SetChannelConditionModel(condModel);
+
 
   LeoOrbitNodeHelper orbit;
   MobilityHelper mobility;
   
+  orbit.SetPrecision(Time(mobilityPrecision)); // Set precision for position updates
   // Create and configure satellites using LEO orbit helper
   NodeContainer satellites = orbit.Install (LeoOrbit (300, 20, 1, 1)); // 300km altitude, 20° inclination, 1 satellite per plane, 1 plane
   
@@ -295,7 +376,7 @@ int main(int argc, char *argv[])
                              "Altitude", DoubleValue (3),
                              "Speed", DoubleValue (carSpeed),
                              "Azimuth", DoubleValue (0),
-                             "Precision", TimeValue (Seconds (1.0))); // Update every second
+                             "Precision", TimeValue (Time(mobilityPrecision))); // Update every second
   mobility.Install (cars.Get(0));
 
   if (traceFile != "")
@@ -316,8 +397,8 @@ int main(int argc, char *argv[])
         //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_ALL);
         LogComponentEnable ("UdpClient", LOG_LEVEL_INFO);
         LogComponentEnable ("UdpServer", LOG_LEVEL_INFO);
-        //LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
-        //LogComponentEnable ("NrPdcp", LOG_LEVEL_INFO);
+        LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("NrPdcp", LOG_LEVEL_INFO);
     }
     /*
      * Default values for the simulation. We are progressively removing all
@@ -360,7 +441,7 @@ int main(int argc, char *argv[])
     channelHelper->ConfigureFactories(
         scenario,
         "Default",
-        "ThreeGpp"); // Use TwoRay propagation model instead of ThreeGpp for simplicity
+        "ThreeGpp");
     channelHelper->AssignChannelsToBands({band});
     allBwps = CcBwpCreator::GetAllBwps({band});
  
@@ -375,31 +456,37 @@ int main(int argc, char *argv[])
     nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
     nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
     nrHelper->SetUeAntennaAttribute("AntennaElement",
-                                    PointerValue(CreateObject<IsotropicAntennaModel>()));
+                                    PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
+                                        "Gain", DoubleValue(satAntennaGainDb)
+                                    )));
  
     // Antennas for the gNbs
     nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
     nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
     nrHelper->SetGnbAntennaAttribute("AntennaElement",
-                                     PointerValue(CreateObject<IsotropicAntennaModel>()));
+                                     PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
+                                        "Gain", DoubleValue(vsatAntennaGainDb)
+                                     )));
  
     // install nr net devices
     NetDeviceContainer gnbNetDev = nrHelper->InstallGnbDevice(satellites, allBwps);
-    NetDeviceContainer ueNetDev = nrHelper->InstallUeDevice(cars, allBwps);
+    NetDeviceContainer txNetDev = nrHelper->InstallUeDevice(cars, allBwps);
+    NetDeviceContainer rxNetDev = nrHelper->InstallUeDevice(satellites, allBwps); // Install UEs on satellites too
+
+    NetDeviceContainer ueNetDev;
+    ueNetDev.Add(txNetDev);
+    ueNetDev.Add(rxNetDev);
  
     int64_t randomStream = 1;
     randomStream += nrHelper->AssignStreams(gnbNetDev, randomStream);
     randomStream += nrHelper->AssignStreams(ueNetDev, randomStream);
  
     nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(txPower);
- 
-    // create the internet and install the IP stack on the UEs
-    // get SGW/PGW and create a single RemoteHost
-    auto [remoteHost, remoteHostIpv4Address] =
-        nrEpcHelper->SetupRemoteHost("100Gb/s", 2500, Seconds(0.010));
+
  
     InternetStackHelper internet;
     internet.Install(cars);
+    internet.Install(satellites);
  
     Ipv4InterfaceContainer ueIpIface;
     ueIpIface = nrEpcHelper->AssignUeIpv4Address(NetDeviceContainer(ueNetDev));
@@ -419,21 +506,48 @@ int main(int argc, char *argv[])
         // dlClient.SetAttribute ("MaxPackets", UintegerValue(0xFFFFFFFF));
         dlClient.SetAttribute("MaxPackets", UintegerValue(10));
         dlClient.SetAttribute("PacketSize", UintegerValue(1500));
-        clientApps.Add(dlClient.Install(remoteHost));
+        clientApps.Add(dlClient.Install(satellites)); // gNB is the remote host
     }
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
  
     // start server and client apps
-    serverApps.Start(Seconds(0.4));
-    clientApps.Start(Seconds(0.4));
+    serverApps.Start(Seconds(0.1));
+    clientApps.Start(Seconds(0.1));
     serverApps.Stop(Time(duration));
     clientApps.Stop(Time(duration) - Seconds(0.2));
  
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
- 
+
+    // Get antennas from NetDevices for SNR computation
+    Ptr<NrUeNetDevice> txUeNetDevice = DynamicCast<NrUeNetDevice>(txNetDev.Get(0));
+    Ptr<NrGnbNetDevice> rxGnbNetDevice = DynamicCast<NrGnbNetDevice>(gnbNetDev.Get(0));
+
+    // Get PhasedArrayModel from the devices
+    Ptr<PhasedArrayModel> txPhasedArray = DynamicCast<PhasedArrayModel>(txUeNetDevice->GetPhy(0)->GetSpectrumPhy()->GetAntenna());
+    Ptr<PhasedArrayModel> rxPhasedArray = DynamicCast<PhasedArrayModel>(rxGnbNetDevice->GetPhy(0)->GetSpectrumPhy()->GetAntenna());
+
+    auto txMob = cars.Get(0)->GetObject<MobilityModel>();
+    auto rxMob = satellites.Get(0)->GetObject<MobilityModel>();
+    
+    for (int i = 0; i < floor(Time(duration).GetMilliSeconds() / Time(mobilityPrecision).GetMilliSeconds()); i++)
+    {
+        Simulator::Schedule(MilliSeconds(Time(mobilityPrecision).GetMilliSeconds() * i),
+                            &ComputeSnr,
+                            ComputeSnrParams(cars.Get(0)->GetObject<MobilityModel>(),
+                                             satellites.Get(0)->GetObject<MobilityModel>(),
+                                             txPowDbm,
+                                             vsatAntennaNoiseFigureDb,
+                                             txPhasedArray,
+                                             rxPhasedArray,
+                                             frequency,
+                                             bandwidth,
+                                             RbBandwidthHz));
+    }
+
+
     Simulator::Stop (Time (duration));
     Simulator::Run();
 
@@ -446,10 +560,10 @@ int main(int argc, char *argv[])
     if (traceFileOutputStream.is_open()){
       traceFileOutputStream.close();
     }
-    std::cout << "Received packets: " << receivedPackets << std::endl;
+
     if (receivedPackets == 10)
     {
-        std::cout << "Test passed!" << std::endl;
+        std::cout << "Test passed! [Received packets: " << receivedPackets << " == 10]" << std::endl;
     }
     else
     {

@@ -59,6 +59,7 @@ LeoOrbitNodeHelper::Install (const LeoOrbit &orbit)
                                  "NumOrbits", IntegerValue (orbit.planes),
                                  "NumSatellites", IntegerValue (orbit.sats));
   mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
+             "Precision", TimeValue (m_precision),
   			     "Altitude", DoubleValue (orbit.alt),
   			     "Inclination", DoubleValue (orbit.inc));
 
@@ -67,6 +68,16 @@ LeoOrbitNodeHelper::Install (const LeoOrbit &orbit)
   mobility.Install (c);
 
   return c;
+}
+
+Time LeoOrbitNodeHelper::GetPrecision () const
+{
+  return m_precision;
+}
+
+void LeoOrbitNodeHelper::SetPrecision (Time precision)
+{
+  m_precision = precision;
 }
 
 NodeContainer

@@ -47,21 +47,10 @@ Dataset satelliti starlink: https://celestrak.org/NORAD/elements/gp.php?GROUP=st
 # Inizio di implementazione della comunicazione satellite-veicolo con 5g-lena
 
 - Implementando un esempio in ns-3-leo partendo da: https://cttc-lena.gitlab.io/nr/html/cttc-3gpp-channel-example_8cc_source.html e dalla simulazione precedente in modo da iniziare a provare la comunicazione tramite 5g-lena tra un satellite e un veicolo sulla terra, utilizzando il mobility model creato precedentemente.
-- Implementato il disegno di una sfera su matplotlib per visualizzare la terra in modo da visualizzare più coerentemente i movimenti del satellite e del veicolo sulla terra, in modo da poter visualizzare graficamente il risultato della simulazione.
+- Re-Implmenetato il visualizzatore tramite plotly per visualizzare i dati con rendering 3d e GPU-accelerato, in modo da poter visualizzare i dati di movimento del satellite e del veicolo e fare debugging sul funzionamento del mobility model, e della comunicazione tra i due nodi. Visualizzazione interattiva con possibilità di visualizzare latituidine, longitudine e altezza del satellite e del veicolo, e la loro posizione nello spazio 3d.
 
+![Orbits tracing with plotly with interactive interface GPU accelerated](data/new_vis_trace_orbits.png)
 
-NOTE:
-
-NtN model default NS3 su 3gpp
-
-ThreeGppPropagationLossModel
-
--154 -150 db S/N chiusura link
-
-Antenna, modello canale, path loss e S/N
-
-Link utile per abilitare 5g-lena alle NTN networks: [https://ieeexplore.ieee.org/document/9469494](https://ieeexplore.ieee.org/document/9469494)
-
-https://www.nsnam.org/workshops/wns3-2023/04-sandri-slides-wns3-2023.pdf
-
-https://www.nsnam.org/doxygen/d7/d09/three-gpp-ntn-channel-example_8cc_source.html
+- Integrazione con i modelli NTN (Non Terrestrial Networks) di ns-3: rimodulazione dei Mobility Model per supportare le coordinate Geocentriche, richieste per l'utilizzo degli scenari NTN, permettendo di conseguenza l'utilizzo di propagation loss 3GPP. L'implementazione è stata realizzata derivando il mobility model GeocentricConstantPositionMobilityModel (maggiori info su [https://www.nsnam.org/workshops/wns3-2023/04-sandri-slides-wns3-2023.pdf](https://www.nsnam.org/workshops/wns3-2023/04-sandri-slides-wns3-2023.pdf)) poichè i controlli all'interno di ns3 vengono effettuati esclusivamente su questa classa (non esiste una classe virtuale per questi modelli) come mostrato qui: [https://www.nsnam.org/doxygen/d5/d46/channel-condition-model_8cc_source.html](https://www.nsnam.org/doxygen/d5/d46/channel-condition-model_8cc_source.html) alla riga 585. Da notare che i metodi utilizzati per il impostazione della posizione non sono funzionanti e richiederebbero l'uso di un MobilityHelper custom che utilizzi i setter della posizione tramite coordinate geocentriche (e non con quelle topocentriche, cioè le coordinate standard).
+- Utilizzo dell'esempio [https://www.nsnam.org/doxygen/d7/d09/three-gpp-ntn-channel-example_8cc_source.html](https://www.nsnam.org/doxygen/d7/d09/three-gpp-ntn-channel-example_8cc_source.html) e dell'esempio [https://cttc-lena.gitlab.io/nr/html/cttc-3gpp-channel-example_8cc_source.html](https://cttc-lena.gitlab.io/nr/html/cttc-3gpp-channel-example_8cc_source.html) per la realizzazione di uno scenario con 1 auto e un satellite in comunicazione tramite 5g-lena, utilizzando i mobility model creati precedentemente, e il propagation loss model ThreeGppPropagationLossModel Suburbano (ma personalizzabile).
+- Implementato nel LeoOrbitNodeHelper la possibilità di specificare la precisione del modello di movimento, in modo da poter aggiornare la posizione del nodo con una certa frequenza (es. ogni 50ms) e non ogni secondo come avviene di default.
