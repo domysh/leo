@@ -250,7 +250,30 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
       Ptr<const Node> node = position->GetObject<Node>();
       traceFileOutputStream << Simulator::Now () << "," << node->GetId () << "," << pos.x << "," << pos.y << "," << pos.z << "," << mobility->GetVelocity() << "," << geo.x << "," << geo.y << "," << geo.z << std::endl;
     }
+}
 
+void PacketSinkRxTrace(std::string context, Ptr<const Packet> packet)
+{
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] PacketSink RX: " 
+              << packet->GetSize() << " bytes at " << context << std::endl;
+}
+
+void UdpClientTxTrace(std::string context, Ptr<const Packet> packet)
+{
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] UdpClient TX: " 
+              << packet->GetSize() << " bytes at " << context << std::endl;
+}
+
+void PointToPointTxTrace(std::string context, Ptr<const Packet> packet)
+{
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] P2P TX: " 
+              << packet->GetSize() << " bytes at " << context << std::endl;
+}
+
+void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
+{
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] P2P RX: " 
+              << packet->GetSize() << " bytes at " << context << std::endl;
 }
 int main(int argc, char *argv[])
 {
@@ -391,14 +414,35 @@ int main(int argc, char *argv[])
     }
   if (logging)
     {
-        //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_ALL);
+        // Propagation and Channel Models
         LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_ALL);
+        //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_ALL);
         //LogComponentEnable ("ThreeGppChannelModel", LOG_LEVEL_ALL);
         //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_ALL);
+        
+        // Application Layer
         LogComponentEnable ("UdpClient", LOG_LEVEL_INFO);
         LogComponentEnable ("UdpServer", LOG_LEVEL_INFO);
+        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_ALL);
+        
+        // Transport Layer
+        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_ALL);
+        
+        // Network Layer (IP)
+        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_ALL);
+        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_ALL);
+        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_ALL);
+        
+        // NR Protocol Stack
         LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
         LogComponentEnable ("NrPdcp", LOG_LEVEL_INFO);
+        LogComponentEnable ("NrGnbMac", LOG_LEVEL_ALL);
+        LogComponentEnable ("NrUeMac", LOG_LEVEL_ALL);
+
+        LogComponentEnable ("EpcTft", LOG_LEVEL_ALL);
+        
+        // Point-to-Point (for backhaul)
+        LogComponentEnable ("PointToPointNetDevice", LOG_LEVEL_ALL);
     }
     /*
      * Default values for the simulation. We are progressively removing all
@@ -470,12 +514,7 @@ int main(int argc, char *argv[])
  
     // install nr net devices
     NetDeviceContainer gnbNetDev = nrHelper->InstallGnbDevice(satellites, allBwps);
-    NetDeviceContainer txNetDev = nrHelper->InstallUeDevice(cars, allBwps);
-    NetDeviceContainer rxNetDev = nrHelper->InstallUeDevice(satellites, allBwps); // Install UEs on satellites too
-
-    NetDeviceContainer ueNetDev;
-    ueNetDev.Add(txNetDev);
-    ueNetDev.Add(rxNetDev);
+    NetDeviceContainer ueNetDev = nrHelper->InstallUeDevice(cars, allBwps);
  
     int64_t randomStream = 1;
     randomStream += nrHelper->AssignStreams(gnbNetDev, randomStream);
@@ -490,6 +529,30 @@ int main(int argc, char *argv[])
  
     Ipv4InterfaceContainer ueIpIface;
     ueIpIface = nrEpcHelper->AssignUeIpv4Address(NetDeviceContainer(ueNetDev));
+    
+    // Install applications on remote host (satellite) connected to PGW
+    Ptr<Node> pgw = nrEpcHelper->GetPgwNode();
+    
+    // Create the remote host
+    NodeContainer remoteHostContainer;
+    remoteHostContainer.Create(1);
+    Ptr<Node> remoteHost = remoteHostContainer.Get(0);
+    internet.Install(remoteHostContainer);
+ 
+    // Create the Internet
+    PointToPointHelper p2ph;
+    p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("100Gb/s")));
+    p2ph.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    p2ph.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
+    NetDeviceContainer internetDevices = p2ph.Install(pgw, remoteHost);
+    
+    Ipv4AddressHelper ipv4h;
+    ipv4h.SetBase("1.0.0.0", "255.0.0.0");
+    Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign(internetDevices);
+ 
+    Ipv4StaticRoutingHelper ipv4RoutingHelper;
+    Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting(remoteHost->GetObject<Ipv4>());
+    remoteHostStaticRouting->AddNetworkRouteTo(Ipv4Address("7.0.0.0"), Ipv4Mask("255.0.0.0"), 1);
  
     // assign IP address to UEs, and install UDP downlink applications
     uint16_t dlPort = 1234;
@@ -502,15 +565,27 @@ int main(int argc, char *argv[])
         serverApps.Add(dlPacketSinkHelper.Install(cars.Get(u)));
  
         UdpClientHelper dlClient(ueIpIface.GetAddress(u), dlPort);
-        dlClient.SetAttribute("Interval", TimeValue(MicroSeconds(1)));
-        // dlClient.SetAttribute ("MaxPackets", UintegerValue(0xFFFFFFFF));
+        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(1))); // Send every 1ms
         dlClient.SetAttribute("MaxPackets", UintegerValue(10));
         dlClient.SetAttribute("PacketSize", UintegerValue(1500));
-        clientApps.Add(dlClient.Install(satellites)); // gNB is the remote host
+        clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
     }
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
+ 
+    // Connect trace sources for packet tracking
+    if (logging) {
+        // Trace UDP application layer
+        Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&UdpClientTxTrace));
+        Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpServer/Rx", MakeCallback(&PacketSinkRxTrace));
+        
+        // Trace Point-to-Point devices (backhaul)
+        Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacTx", 
+                       MakeCallback(&PointToPointTxTrace));
+        Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacRx", 
+                       MakeCallback(&PointToPointRxTrace));
+    }
  
     // start server and client apps
     serverApps.Start(Seconds(0.1));
@@ -521,8 +596,14 @@ int main(int argc, char *argv[])
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
 
+    // Open results file for SNR logging
+    resultsFile.open("snr_results.txt");
+    if (!resultsFile.is_open()) {
+        NS_FATAL_ERROR("Could not open results file");
+    }
+
     // Get antennas from NetDevices for SNR computation
-    Ptr<NrUeNetDevice> txUeNetDevice = DynamicCast<NrUeNetDevice>(txNetDev.Get(0));
+    Ptr<NrUeNetDevice> txUeNetDevice = DynamicCast<NrUeNetDevice>(ueNetDev.Get(0));
     Ptr<NrGnbNetDevice> rxGnbNetDevice = DynamicCast<NrGnbNetDevice>(gnbNetDev.Get(0));
 
     // Get PhasedArrayModel from the devices
@@ -559,6 +640,10 @@ int main(int argc, char *argv[])
 
     if (traceFileOutputStream.is_open()){
       traceFileOutputStream.close();
+    }
+
+    if (resultsFile.is_open()){
+      resultsFile.close();
     }
 
     if (receivedPackets == 10)
