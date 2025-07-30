@@ -9,7 +9,7 @@ output: pdf_document
 
 Presa come base per l'implementazione del sistema satellitare abbiamo preso: https://github.com/dadada/ns-3-leo che tuttavia:
 
-- risulta poco aggiornato (non compatibile con le ultime versioni di ns3
+- risulta poco aggiornato (non compatibile con le ultime versioni di ns3)
 - Manca di alcune feature (oggetto sulla terra a velocità costante)
 
 Pertanto il lavoro fatto è stato:

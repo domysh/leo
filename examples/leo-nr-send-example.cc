@@ -415,7 +415,7 @@ int main(int argc, char *argv[])
   if (logging)
     {
         // Propagation and Channel Models
-        LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_ALL);
+        //LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_ALL);
         //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_ALL);
         //LogComponentEnable ("ThreeGppChannelModel", LOG_LEVEL_ALL);
         //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_ALL);
@@ -423,25 +423,23 @@ int main(int argc, char *argv[])
         // Application Layer
         LogComponentEnable ("UdpClient", LOG_LEVEL_INFO);
         LogComponentEnable ("UdpServer", LOG_LEVEL_INFO);
-        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_ALL);
+        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_INFO);
         
         // Transport Layer
-        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_ALL);
+        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_INFO);
         
         // Network Layer (IP)
-        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_ALL);
-        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_ALL);
-        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_ALL);
+        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_INFO);
+        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_INFO);
+        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_INFO);
         
         // NR Protocol Stack
-        LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("NrRlcUm", LOG_LEVEL_INFO);
         LogComponentEnable ("NrPdcp", LOG_LEVEL_INFO);
-        LogComponentEnable ("NrGnbMac", LOG_LEVEL_ALL);
-        LogComponentEnable ("NrUeMac", LOG_LEVEL_ALL);
-
-        LogComponentEnable ("EpcTft", LOG_LEVEL_ALL);
+        LogComponentEnable ("NrGnbMac", LOG_LEVEL_INFO);
+        LogComponentEnable ("NrUeMac", LOG_LEVEL_INFO);
         
-        // Point-to-Point (for backhaul)
+        // Point-to-Point
         LogComponentEnable ("PointToPointNetDevice", LOG_LEVEL_ALL);
     }
     /*
@@ -573,6 +571,23 @@ int main(int argc, char *argv[])
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
+    
+    // Block direct communication between car and remote host
+    // This is achieved by not adding direct routes between them
+    // The communication will go through the satellite/gNB
+    Ptr<Ipv4StaticRouting> carStaticRouting = ipv4RoutingHelper.GetStaticRouting(cars.Get(0)->GetObject<Ipv4>());
+    // Do not add route to remote host - force traffic through EPC
+ 
+    // Print routing tables for debugging
+    if (logging) {
+        std::cout << "=== CAR ROUTING TABLE ===" << std::endl;
+        Ptr<OutputStreamWrapper> carRoutingStream = Create<OutputStreamWrapper>(&std::cout);
+        carStaticRouting->PrintRoutingTable(carRoutingStream);
+        
+        std::cout << "=== REMOTE HOST ROUTING TABLE ===" << std::endl;
+        Ptr<OutputStreamWrapper> remoteRoutingStream = Create<OutputStreamWrapper>(&std::cout);
+        remoteHostStaticRouting->PrintRoutingTable(remoteRoutingStream);
+    }
  
     // Connect trace sources for packet tracking
     if (logging) {
