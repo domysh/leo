@@ -296,6 +296,7 @@ int main(int argc, char *argv[])
     std::string duration = "420ms";
     std::string traceFile = "";
     std::string mobilityPrecision = "50ms"; // Precision for mobility updates
+    bool enableGnb = true; // Whether to enable gNB transmission
  
     CommandLine cmd(__FILE__);
     cmd.AddValue("scenario",
@@ -317,6 +318,7 @@ int main(int argc, char *argv[])
     cmd.AddValue("vsatAntennaNoiseFigureDb",
                 "The UE VSAT antenna noise figure in dB",
                 vsatAntennaNoiseFigureDb);
+    cmd.AddValue("enableGnb", "Enable gNB transmission (1) or disable (0)", enableGnb);
     cmd.Parse(argc, argv);
 
     // Calculate transmission power in dBm using EIRPDensity + 10*log10(Bandwidth) - AntennaGain +
@@ -415,32 +417,32 @@ int main(int argc, char *argv[])
   if (logging)
     {
         // Propagation and Channel Models
-        //LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_ALL);
-        //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_ALL);
-        //LogComponentEnable ("ThreeGppChannelModel", LOG_LEVEL_ALL);
-        //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_ALL);
+        //LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_LOGIC);
+        //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_LOGIC);
+        //LogComponentEnable ("ThreeGppChannelModel", LOG_LEVEL_LOGIC);
+        //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_LOGIC);
         
         // Application Layer
-        LogComponentEnable ("UdpClient", LOG_LEVEL_INFO);
-        LogComponentEnable ("UdpServer", LOG_LEVEL_INFO);
-        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_INFO);
+        LogComponentEnable ("UdpClient", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("UdpServer", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_LOGIC);
         
         // Transport Layer
-        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_INFO);
+        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_LOGIC);
         
         // Network Layer (IP)
-        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_INFO);
-        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_INFO);
-        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_INFO);
+        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_LOGIC);
         
         // NR Protocol Stack
-        LogComponentEnable ("NrRlcUm", LOG_LEVEL_INFO);
-        LogComponentEnable ("NrPdcp", LOG_LEVEL_INFO);
-        LogComponentEnable ("NrGnbMac", LOG_LEVEL_INFO);
-        LogComponentEnable ("NrUeMac", LOG_LEVEL_INFO);
+        LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("NrPdcp", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("NrGnbMac", LOG_LEVEL_LOGIC);
+        LogComponentEnable ("NrUeMac", LOG_LEVEL_LOGIC);
         
         // Point-to-Point
-        LogComponentEnable ("PointToPointNetDevice", LOG_LEVEL_ALL);
+        LogComponentEnable ("PointToPointNetDevice", LOG_LEVEL_LOGIC);
     }
     /*
      * Default values for the simulation. We are progressively removing all
@@ -518,7 +520,14 @@ int main(int argc, char *argv[])
     randomStream += nrHelper->AssignStreams(gnbNetDev, randomStream);
     randomStream += nrHelper->AssignStreams(ueNetDev, randomStream);
  
-    nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(txPower);
+    // Set gNB transmission power based on enableGnb parameter
+    if (enableGnb) {
+        nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(txPower);
+        std::cout << "gNB enabled with transmission power: " << txPower << " dBm" << std::endl;
+    } else {
+        nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(-1000); // Effectively disable transmission
+        std::cout << "gNB disabled (transmission power set to -1000 dBm)" << std::endl;
+    }
 
  
     InternetStackHelper internet;
@@ -644,7 +653,12 @@ int main(int argc, char *argv[])
     }
 
 
+    Simulator::Schedule(Seconds(0.1), []() {
+        std::cout << "============= Starting UDP client and server applications =============" << std::endl;
+    });
+
     Simulator::Stop (Time (duration));
+    std::cout << "============= Starting simulation for " << duration << " =============" << std::endl;
     Simulator::Run();
 
  
