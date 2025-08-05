@@ -56,5 +56,6 @@ Dataset satelliti starlink: https://celestrak.org/NORAD/elements/gp.php?GROUP=st
 - Implementato nel LeoOrbitNodeHelper la possibilità di specificare la precisione del modello di movimento, in modo da poter aggiornare la posizione del nodo con una certa frequenza (es. ogni 50ms) e non ogni secondo come avviene di default.
 - Implementati dagli esempi precedentemente citati, i metodi per calcolare il SNR tra il satellite e il veicolo, utilizzando le antenne dei dispositivi e il propagation loss model 3GPP, in modo da poter calcolare la qualità del segnale tra i due nodi.
 - Integrato nell'esempio con comunicazione tramite nr, più print di debug sulle condizioni di rete e sullo stato della comunicazione, e connesso il gNB sul satellite con un canale PointToPoint ad un nodo di rete utilizzato unicamente per risolvere le problematiche di configurazione di 5g-lena e provare (con successo questa volta) una comunicazione di pacchetti UDP tra il satellite e il veicolo.
+- Ristrutturata la gestione del parametro "precision" e lo scheduling degli aggiornamenti della posizione del nodo veicolo e del satellite al fine di risolvere bug di sincronizzazione e renderne la gestione più stabile e coerente evitanto scheduling di eventi non necessari.
 
 ![Simulation Scenario with 1 car and 1 satellite communicating with 5g-lena](data/satellite_and_car_nr_simulation.png)
