@@ -1,5 +1,9 @@
 *.swp
 *.swo
 .vscode
-examples/trace_view/grafico_3d_gpu.html
-examples/trace_view/punti_3d.csv
+/examples/trace_view/grafico_3d_gpu.html
+/examples/trace_view/punti_3d.csv
+/doc/build/**
+/doc/build
+/doc/svg-inkscape/**
+/doc/svg-inkscape/

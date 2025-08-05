@@ -1,5 +1,0 @@
--154 -150 db S/N chiusura link
-
-Antenna, modello canale, path loss e S/N
-
-Link utile per abilitare 5g-lena alle NTN networks: [https://ieeexplore.ieee.org/document/9469494](https://ieeexplore.ieee.org/document/9469494)
