@@ -21,217 +21,9 @@
 
 using namespace ns3;
 
-static Ptr<ThreeGppPropagationLossModel>
-    m_propagationLossModel; //!< the PropagationLossModel object
-static Ptr<ThreeGppSpectrumPropagationLossModel>
-    m_spectrumLossModel;          //!< the SpectrumPropagationLossModel object
 static std::ofstream traceFileOutputStream;
-static std::ofstream resultsFile; //!< The results file
 static bool logging = false; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
-
-/**
- * @brief Create the PSD for the TX
- *
- * @param fcHz the carrier frequency in Hz
- * @param pwrDbm the transmission power in dBm
- * @param bwHz the bandwidth in Hz
- * @param rbWidthHz the Resource Block (RB) width in Hz
- *
- * @return the pointer to the PSD
-*/
-Ptr<SpectrumValue>
-CreateTxPowerSpectralDensity(double fcHz, double pwrDbm, double bwHz, double rbWidthHz)
-{
-    unsigned int numRbs = std::floor(bwHz / rbWidthHz);
-    double f = fcHz - (numRbs * rbWidthHz / 2.0);
-    double powerTx = pwrDbm; // dBm power
- 
-    Bands rbs; // A vector representing each resource block
-    for (uint32_t numrb = 0; numrb < numRbs; ++numrb)
-    {
-        BandInfo rb;
-        rb.fl = f;
-        f += rbWidthHz / 2;
-        rb.fc = f;
-        f += rbWidthHz / 2;
-        rb.fh = f;
- 
-        rbs.push_back(rb);
-    }
-    Ptr<SpectrumModel> model = Create<SpectrumModel>(rbs);
-    Ptr<SpectrumValue> txPsd = Create<SpectrumValue>(model);
- 
-    double powerTxW = std::pow(10., (powerTx - 30) / 10); // Get Tx power in Watts
-    double txPowerDensity = (powerTxW / bwHz);
- 
-    for (auto psd = txPsd->ValuesBegin(); psd != txPsd->ValuesEnd(); ++psd)
-    {
-        *psd = txPowerDensity;
-    }
- 
-    return txPsd; // [W/Hz]
-}
- 
-/**
- * @brief A structure that holds the parameters for the
- * ComputeSnr function. In this way the problem with the limited
- * number of parameters of method Schedule is avoided.
- */
-struct ComputeSnrParams
-{
-    Ptr<MobilityModel> txMob;        //!< the tx mobility model
-    Ptr<MobilityModel> rxMob;        //!< the rx mobility model
-    double txPow;                    //!< the tx power in dBm
-    double noiseFigure;              //!< the noise figure in dB
-    Ptr<PhasedArrayModel> txAntenna; //!< the tx antenna array
-    Ptr<PhasedArrayModel> rxAntenna; //!< the rx antenna array
-    double frequency;                //!< the carrier frequency in Hz
-    double bandwidth;                //!< the total bandwidth in Hz
-    double resourceBlockBandwidth;   //!< the Resource Block bandwidth in Hz
- 
-    /**
-     * @brief Constructor
-     * @param pTxMob the tx mobility model
-     * @param pRxMob the rx mobility model
-     * @param pTxPow the tx power in dBm
-     * @param pNoiseFigure the noise figure in dB
-     * @param pTxAntenna the tx antenna array
-     * @param pRxAntenna the rx antenna array
-     * @param pFrequency the carrier frequency in Hz
-     * @param pBandwidth the total bandwidth in Hz
-     * @param pResourceBlockBandwidth the Resource Block bandwidth in Hz
-     */
-    ComputeSnrParams(Ptr<MobilityModel> pTxMob,
-                     Ptr<MobilityModel> pRxMob,
-                     double pTxPow,
-                     double pNoiseFigure,
-                     Ptr<PhasedArrayModel> pTxAntenna,
-                     Ptr<PhasedArrayModel> pRxAntenna,
-                     double pFrequency,
-                     double pBandwidth,
-                     double pResourceBlockBandwidth)
-    {
-        txMob = pTxMob;
-        rxMob = pRxMob;
-        txPow = pTxPow;
-        noiseFigure = pNoiseFigure;
-        txAntenna = pTxAntenna;
-        rxAntenna = pRxAntenna;
-        frequency = pFrequency;
-        bandwidth = pBandwidth;
-        resourceBlockBandwidth = pResourceBlockBandwidth;
-    }
-};
-
-/**
- * @brief Create the noise PSD for the
- *
- * @param fcHz the carrier frequency in Hz
- * @param noiseFigureDb the noise figure in dB
- * @param bwHz the bandwidth in Hz
- * @param rbWidthHz the Resource Block (RB) width in Hz
- *
- * @return the pointer to the noise PSD
- */
-Ptr<SpectrumValue>
-CreateNoisePowerSpectralDensity(double fcHz, double noiseFigureDb, double bwHz, double rbWidthHz)
-{
-    unsigned int numRbs = std::floor(bwHz / rbWidthHz);
-    double f = fcHz - (numRbs * rbWidthHz / 2.0);
- 
-    Bands rbs;              // A vector representing each resource block
-    std::vector<int> rbsId; // A vector representing the resource block IDs
-    for (uint32_t numrb = 0; numrb < numRbs; ++numrb)
-    {
-        BandInfo rb;
-        rb.fl = f;
-        f += rbWidthHz / 2;
-        rb.fc = f;
-        f += rbWidthHz / 2;
-        rb.fh = f;
- 
-        rbs.push_back(rb);
-        rbsId.push_back(numrb);
-    }
-    Ptr<SpectrumModel> model = Create<SpectrumModel>(rbs);
-    Ptr<SpectrumValue> txPsd = Create<SpectrumValue>(model);
- 
-    // see "LTE - From theory to practice"
-    // Section 22.4.4.2 Thermal Noise and Receiver Noise Figure
-    const double ktDbmHz = -174.0;                        // dBm/Hz
-    double ktWHz = std::pow(10.0, (ktDbmHz - 30) / 10.0); // W/Hz
-    double noiseFigureLinear = std::pow(10.0, noiseFigureDb / 10.0);
- 
-    double noisePowerSpectralDensity = ktWHz * noiseFigureLinear;
- 
-    for (auto rbId : rbsId)
-    {
-        (*txPsd)[rbId] = noisePowerSpectralDensity;
-    }
- 
-    return txPsd; // W/Hz
-}
-
-/**
- * Compute the average SNR
- * @param params A structure that holds the parameters that are needed to perform calculations in
- * ComputeSnr
- */
-static void
-ComputeSnr(ComputeSnrParams& params)
-{
-    Ptr<SpectrumValue> txPsd = CreateTxPowerSpectralDensity(params.frequency,
-                                                            params.txPow,
-                                                            params.bandwidth,
-                                                            params.resourceBlockBandwidth);
-    Ptr<SpectrumValue> rxPsd = txPsd->Copy();
-    if (logging){
-        std::cout << "Average tx power " << 10 * log10(Sum(*txPsd) * params.resourceBlockBandwidth) << " dB" << std::endl;
-    }
-    // create the noise PSD
-    Ptr<SpectrumValue> noisePsd = CreateNoisePowerSpectralDensity(params.frequency,
-                                                                  params.noiseFigure,
-                                                                  params.bandwidth,
-                                                                  params.resourceBlockBandwidth);
-    
-    if (logging){
-        std::cout << "Average noise power "
-                  << 10 * log10(Sum(*noisePsd) * params.resourceBlockBandwidth) << " dB" << std::endl;
-    }
- 
-    // apply the pathloss
-    double propagationGainDb = m_propagationLossModel->CalcRxPower(0, params.txMob, params.rxMob);
-    if (logging){
-        std::cout << "Pathloss " << propagationGainDb << " dB" << std::endl;
-    }
-    double propagationGainLinear = std::pow(10.0, (propagationGainDb) / 10.0);
-    *(rxPsd) *= propagationGainLinear;
- 
-    NS_ASSERT_MSG(params.txAntenna, "params.txAntenna is nullptr!");
-    NS_ASSERT_MSG(params.rxAntenna, "params.rxAntenna is nullptr!");
- 
-    Ptr<SpectrumSignalParameters> rxSsp = Create<SpectrumSignalParameters>();
-    rxSsp->psd = rxPsd;
-    rxSsp->txAntenna =
-        ConstCast<AntennaModel, const AntennaModel>(params.txAntenna->GetAntennaElement());
- 
-    // apply the fast fading and the beamforming gain
-    rxSsp = m_spectrumLossModel->CalcRxPowerSpectralDensity(rxSsp,
-                                                            params.txMob,
-                                                            params.rxMob,
-                                                            params.txAntenna,
-                                                            params.rxAntenna);
-    if (logging){
-        std::cout << "Average rx power " << 10 * log10(Sum(*rxSsp->psd) * params.bandwidth) << " dB" << std::endl;
-        std::cout << "Average SNR " << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " dB" << std::endl;
-    }
- 
-    // print the SNR and pathloss values in the output file
-    resultsFile << Simulator::Now().GetSeconds() << " "
-                << 10 * log10(Sum(*rxSsp->psd) / Sum(*noisePsd)) << " " << propagationGainDb
-                << std::endl;
-}
 
 
 // Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
@@ -286,16 +78,13 @@ int main(int argc, char *argv[])
     double carLatitude = 19.5;
     double carLongitude = 1.5;
     double txPower = 40; // txPower
-    double RbBandwidthHz = 120e3; // Hz
     // Satellite parameters
-    double satEIRPDensity = 40;     // dBW/MHz
     double satAntennaGainDb = 58.5; // dB
     // UE Parameters
     double vsatAntennaGainDb = 39.7; // dB
-    double vsatAntennaNoiseFigureDb = 1.2; // dB
     std::string duration = "420ms";
     std::string traceFile = "";
-    std::string mobilityPrecision = "50ms"; // Precision for mobility updates
+    Time mobilityPrecision = MilliSeconds(50); // Precision for mobility updates
     bool enableGnb = true; // Whether to enable gNB transmission
  
     CommandLine cmd(__FILE__);
@@ -315,15 +104,11 @@ int main(int argc, char *argv[])
     cmd.AddValue("duration", "Duration of the simulation in seconds", duration);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
     cmd.AddValue("txPower", "Transmission power in dBm", txPower);
-    cmd.AddValue("vsatAntennaNoiseFigureDb",
-                "The UE VSAT antenna noise figure in dB",
-                vsatAntennaNoiseFigureDb);
+    cmd.AddValue("mobilityPrecision",
+                "Precision for mobility updates (e.g., 50ms, 100ms, etc.)",
+                mobilityPrecision);
     cmd.AddValue("enableGnb", "Enable gNB transmission (1) or disable (0)", enableGnb);
     cmd.Parse(argc, argv);
-
-    // Calculate transmission power in dBm using EIRPDensity + 10*log10(Bandwidth) - AntennaGain +
-    // 30
-    double txPowDbm = (satEIRPDensity + 10 * log10(bandwidth / 1e6) - satAntennaGainDb) + 30;
 
   Config::SetDefault("ns3::ThreeGppChannelModel::UpdatePeriod",
                         TimeValue(MilliSeconds(10))); // update the channel at every 10 ms
@@ -363,30 +148,11 @@ int main(int argc, char *argv[])
     {
         NS_FATAL_ERROR("Unknown NTN scenario");
     }
-    // End changes with respect to three-gpp-channel-example
- 
-    // create the propagation loss model
-    m_propagationLossModel = propagationLossModelFactory.Create<ThreeGppPropagationLossModel>();
-    m_propagationLossModel->SetAttribute("Frequency", DoubleValue(frequency));
-    m_propagationLossModel->SetAttribute("ShadowingEnabled", BooleanValue(true));
- 
-    // create the spectrum propagation loss model
-    m_spectrumLossModel = CreateObject<ThreeGppSpectrumPropagationLossModel>();
-    m_spectrumLossModel->SetChannelModelAttribute("Frequency", DoubleValue(frequency));
-    m_spectrumLossModel->SetChannelModelAttribute("Scenario", StringValue(scenario));
- 
-    // create the channel condition model and associate it with the spectrum and
-    // propagation loss model
-    Ptr<ChannelConditionModel> condModel =
-        channelConditionModelFactory.Create<ThreeGppChannelConditionModel>();
-    m_spectrumLossModel->SetChannelModelAttribute("ChannelConditionModel", PointerValue(condModel));
-    m_propagationLossModel->SetChannelConditionModel(condModel);
-
 
   LeoOrbitNodeHelper orbit;
   MobilityHelper mobility;
   
-  orbit.SetPrecision(Time(mobilityPrecision)); // Set precision for position updates
+  orbit.SetPrecision(mobilityPrecision); // Set precision for position updates
   // Create and configure satellites using LEO orbit helper
   NodeContainer satellites = orbit.Install (LeoOrbit (300, 20, 1, 1)); // 300km altitude, 20° inclination, 1 satellite per plane, 1 plane
   
@@ -401,7 +167,7 @@ int main(int argc, char *argv[])
                              "Altitude", DoubleValue (3),
                              "Speed", DoubleValue (carSpeed),
                              "Azimuth", DoubleValue (0),
-                             "Precision", TimeValue (Time(mobilityPrecision))); // Update every second
+                             "Precision", TimeValue (mobilityPrecision)); // Update every second
   mobility.Install (cars.Get(0));
 
   if (traceFile != "")
@@ -449,6 +215,10 @@ int main(int argc, char *argv[])
      * the instances of SetDefault, but we need it for legacy code (LTE)
      */
     Config::SetDefault("ns3::NrRlcUm::MaxTxBufferSize", UintegerValue(999999999));
+    
+    // Configure NR MAC scheduler parameters
+    Config::SetDefault("ns3::NrMacSchedulerNs3::DlCtrlSymbols", UintegerValue(1));
+    Config::SetDefault("ns3::NrMacSchedulerNs3::UlCtrlSymbols", UintegerValue(1));
 
     /*
      * Create NR simulation helpers
@@ -492,9 +262,18 @@ int main(int argc, char *argv[])
     // Configure ideal beamforming method
     idealBeamformingHelper->SetAttribute("BeamformingMethod",
                                          TypeIdValue(DirectPathBeamforming::GetTypeId()));
+    
+    // Configure beamforming periodicity
+    idealBeamformingHelper->SetAttribute("BeamformingPeriodicity", TimeValue(MilliSeconds(500)));
  
     // Configure scheduler
     nrHelper->SetSchedulerTypeId(NrMacSchedulerTdmaRR::GetTypeId());
+    
+    // Configure scheduler parameters to ensure RB allocation
+    nrHelper->SetSchedulerAttribute("FixedMcsDl", BooleanValue(true));
+    nrHelper->SetSchedulerAttribute("StartingMcsDl", UintegerValue(28));
+    nrHelper->SetSchedulerAttribute("FixedMcsUl", BooleanValue(true));
+    nrHelper->SetSchedulerAttribute("StartingMcsUl", UintegerValue(28));
  
     // Antennas for the UEs
     nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
@@ -572,9 +351,9 @@ int main(int argc, char *argv[])
         serverApps.Add(dlPacketSinkHelper.Install(cars.Get(u)));
  
         UdpClientHelper dlClient(ueIpIface.GetAddress(u), dlPort);
-        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(1))); // Send every 1ms
+        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(10))); // Send every 10ms (was 1ms)
         dlClient.SetAttribute("MaxPackets", UintegerValue(10));
-        dlClient.SetAttribute("PacketSize", UintegerValue(1500));
+        dlClient.SetAttribute("PacketSize", UintegerValue(1024)); // Reduced from 1500 to 1024
         clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
     }
  
@@ -612,19 +391,13 @@ int main(int argc, char *argv[])
     }
  
     // start server and client apps
-    serverApps.Start(Seconds(0.1));
-    clientApps.Start(Seconds(0.1));
+    serverApps.Start(Seconds(0.5)); // Increased from 0.1 to 0.5
+    clientApps.Start(Seconds(1.0)); // Increased from 0.1 to 1.0  
     serverApps.Stop(Time(duration));
-    clientApps.Stop(Time(duration) - Seconds(0.2));
+    clientApps.Stop(Time(duration) - Seconds(0.5)); // Increased stop margin
  
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
-
-    // Open results file for SNR logging
-    resultsFile.open("snr_results.txt");
-    if (!resultsFile.is_open()) {
-        NS_FATAL_ERROR("Could not open results file");
-    }
 
     // Get antennas from NetDevices for SNR computation
     Ptr<NrUeNetDevice> txUeNetDevice = DynamicCast<NrUeNetDevice>(ueNetDev.Get(0));
@@ -637,21 +410,6 @@ int main(int argc, char *argv[])
     auto txMob = cars.Get(0)->GetObject<MobilityModel>();
     auto rxMob = satellites.Get(0)->GetObject<MobilityModel>();
     
-    for (int i = 0; i < floor(Time(duration).GetMilliSeconds() / Time(mobilityPrecision).GetMilliSeconds()); i++)
-    {
-        Simulator::Schedule(MilliSeconds(Time(mobilityPrecision).GetMilliSeconds() * i),
-                            &ComputeSnr,
-                            ComputeSnrParams(cars.Get(0)->GetObject<MobilityModel>(),
-                                             satellites.Get(0)->GetObject<MobilityModel>(),
-                                             txPowDbm,
-                                             vsatAntennaNoiseFigureDb,
-                                             txPhasedArray,
-                                             rxPhasedArray,
-                                             frequency,
-                                             bandwidth,
-                                             RbBandwidthHz));
-    }
-
 
     Simulator::Schedule(Seconds(0.1), []() {
         std::cout << "============= Starting UDP client and server applications =============" << std::endl;
@@ -669,10 +427,6 @@ int main(int argc, char *argv[])
 
     if (traceFileOutputStream.is_open()){
       traceFileOutputStream.close();
-    }
-
-    if (resultsFile.is_open()){
-      resultsFile.close();
     }
 
     if (receivedPackets == 10)
