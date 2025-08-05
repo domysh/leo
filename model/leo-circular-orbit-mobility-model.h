@@ -129,6 +129,8 @@ private:
    */
   Time m_precision;
 
+  EventId m_updateEvent = EventId(); ///< Event for periodic updates
+
   /**
    * \return the current position.
    */
@@ -146,6 +148,12 @@ private:
    * \return the current geographic velocity.
    */
   virtual Vector DoGetGeocentricVelocity() const;
+
+  /**
+   * \brief Update the internal precision of the mobility model (and schedule next update)
+   * \param precision the precision to set
+   */
+  void SetPrecision (Time precision);
 
   /**
    * \brief Get the normal vector of the orbital plane

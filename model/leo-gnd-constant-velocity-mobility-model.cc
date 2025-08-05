@@ -41,7 +41,7 @@ GndConstantVelocityMobilityModel::GetTypeId ()
     .AddAttribute ("Precision",
                 "The time precision with which to compute position updates. 0 means arbitrary precision",
                 TimeValue (Seconds (1)),
-                MakeTimeAccessor (&GndConstantVelocityMobilityModel::m_precision),
+                MakeTimeAccessor (&GndConstantVelocityMobilityModel::SetPrecision),
                 MakeTimeChecker ())
     .AddAttribute ("Altitude",
                      "A height from the earth's surface in meters",
@@ -74,17 +74,9 @@ GndConstantVelocityMobilityModel::GetTypeId ()
   return tid;
 }
 
-GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel()
-: GeocentricConstantPositionMobilityModel (),
-  m_initialLatitude(0.0),
-  m_initialLongitude(0.0),
-  m_altitude(0.0),
-  m_azimuth(0.0),
-  m_speed(0.0),
-  m_precision(Seconds(1))
+GndConstantVelocityMobilityModel::GndConstantVelocityMobilityModel() : GeocentricConstantPositionMobilityModel ()
 {
-  NS_LOG_FUNCTION (this);
-  Update(); // Initialize position
+  NS_LOG_FUNCTION_NOARGS ();
 }
 
 double
@@ -197,10 +189,13 @@ GndConstantVelocityMobilityModel::Update ()
 {
   m_position = CalcPosition (Simulator::Now ());
   NotifyCourseChange ();
-
+  if (m_updateEvent.IsPending()) {
+    Simulator::Cancel(m_updateEvent);
+    m_updateEvent = EventId(); // Reset the event
+  }
   if (m_precision > Seconds (0))
     {
-      Simulator::Schedule (m_precision, &GndConstantVelocityMobilityModel::Update, this);
+      m_updateEvent = Simulator::Schedule (m_precision, &GndConstantVelocityMobilityModel::Update, this);
     }
 
   return m_position;
@@ -255,6 +250,11 @@ GndConstantVelocityMobilityModel::DoGetGeocentricPosition() const
   return m_position;
 }
 
+void GndConstantVelocityMobilityModel::SetPrecision (Time precision) {
+  m_precision = precision;
+  Update();
+}
+
 void
 GndConstantVelocityMobilityModel::DoSetGeocentricPosition(const Vector& position)
 {
@@ -306,6 +306,8 @@ GndConstantVelocityMobilityModel::GetPosition() const
 {
   return DoGetPosition();
 }
+
+
 
 void
 GndConstantVelocityMobilityModel::SetPosition(const Vector& position)

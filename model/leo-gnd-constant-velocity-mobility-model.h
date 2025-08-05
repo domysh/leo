@@ -154,6 +154,8 @@ private:
    */
   Vector m_position;
 
+  EventId m_updateEvent = EventId(); ///< Event for periodic updates
+
   /**
    * Time precision for positions
    */
@@ -185,6 +187,12 @@ private:
    * \return position at time t
    */
   Vector CalcPosition (Time t) const;
+
+  /**
+   * \brief Update the internal precision of the mobility model (and schedule next update)
+   * \param precision the precision to set
+   */
+  void SetPrecision (Time precision);
 
   /**
    * \brief Get the azimuth of the velocity vector

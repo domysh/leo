@@ -56,7 +56,7 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
     .AddAttribute ("Precision",
                    "The time precision with which to compute position updates. 0 means arbitrary precision",
                    TimeValue (Seconds (1)),
-                   MakeTimeAccessor (&LeoCircularOrbitMobilityModel::m_precision),
+                   MakeTimeAccessor (&LeoCircularOrbitMobilityModel::SetPrecision),
                    MakeTimeChecker ());
     TypeId::AttributeInformation notToUse;
     tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
@@ -64,7 +64,7 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
   return tid;
 }
 
-LeoCircularOrbitMobilityModel::LeoCircularOrbitMobilityModel() : GeocentricConstantPositionMobilityModel (), m_longitude (0.0), m_offset (0.0), m_position ()
+LeoCircularOrbitMobilityModel::LeoCircularOrbitMobilityModel() : GeocentricConstantPositionMobilityModel ()
 {
   NS_LOG_FUNCTION_NOARGS ();
 }
@@ -160,13 +160,21 @@ Vector LeoCircularOrbitMobilityModel::Update ()
 {
   m_position = CalcPosition (Simulator::Now ());
   NotifyCourseChange ();
-
+  if (m_updateEvent.IsPending()) {
+    Simulator::Cancel(m_updateEvent);
+    m_updateEvent = EventId(); // Reset the event
+  }
   if (m_precision > Seconds (0))
     {
-      Simulator::Schedule (m_precision, &LeoCircularOrbitMobilityModel::Update, this);
+      m_updateEvent = Simulator::Schedule (m_precision, &LeoCircularOrbitMobilityModel::Update, this);
     }
 
   return m_position;
+}
+
+void LeoCircularOrbitMobilityModel::SetPrecision (Time precision) {
+  m_precision = precision;
+  Update();
 }
 
 Vector
