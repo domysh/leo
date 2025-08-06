@@ -120,6 +120,11 @@ private:
   double m_offset;
 
   /**
+   * Retrograde orbit flag
+   */
+  bool m_retrogradeOrbit = false;
+
+  /**
    * Current position
    */
   Vector3D m_position;

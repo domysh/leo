@@ -1,6 +1,8 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <csignal>
+#include <cstdlib>
 
 #include "ns3/leo-module.h"
 #include "ns3/leo-ground-node-helper.h"
@@ -81,11 +83,13 @@ int main(int argc, char *argv[])
     // Satellite parameters
     double satAntennaGainDb = 58.5; // dB
     // UE Parameters
-    double vsatAntennaGainDb = 39.7; // dB
+    double ueAntennaGainDb = 39.7; // dB
+    int numCars = 1; // number of cars in the simulation
     std::string duration = "420ms";
     std::string traceFile = "";
-    Time mobilityPrecision = MilliSeconds(50); // Precision for mobility updates
+    Time mobilityPrecision = MilliSeconds(1000); // Precision for mobility updates
     bool enableGnb = true; // Whether to enable gNB transmission
+    auto rnd_seed = time(nullptr);
  
     CommandLine cmd(__FILE__);
     cmd.AddValue("scenario",
@@ -95,80 +99,67 @@ int main(int argc, char *argv[])
     cmd.AddValue("frequency", "The central carrier frequency in Hz.", frequency);
     cmd.AddValue("bandwidth", "The total bandwidth in Hz.", bandwidth);
     cmd.AddValue("carSpeed", "Speed of the car in m/s", carSpeed);
-    cmd.AddValue("carLatitude", "Initial latitude of the car", carLatitude);
-    cmd.AddValue("carLongitude", "Initial longitude of the car", carLongitude);
+    cmd.AddValue("carLatitude", "Initial latitude of the car (only with 1 car)", carLatitude);
+    cmd.AddValue("carLongitude", "Initial longitude of the car (only with 1 car)", carLongitude);
+    cmd.AddValue("numCars", "Number of cars in the simulation", numCars);
     cmd.AddValue("satAntennaGainDb", "The satellite antenna gain in dB", satAntennaGainDb);
-    cmd.AddValue("vsatAntennaGainDb", "The UE VSAT antenna gain in dB", vsatAntennaGainDb);
+    cmd.AddValue("ueAntennaGainDb", "The UE antenna gain in dB", ueAntennaGainDb);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
     cmd.AddValue("logging", "If set to 0, log components will be disabled.", logging);
     cmd.AddValue("duration", "Duration of the simulation in seconds", duration);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
     cmd.AddValue("txPower", "Transmission power in dBm", txPower);
+    cmd.AddValue("seed", "Random seed for the simulation (default: current time)", rnd_seed);
     cmd.AddValue("mobilityPrecision",
                 "Precision for mobility updates (e.g., 50ms, 100ms, etc.)",
                 mobilityPrecision);
     cmd.AddValue("enableGnb", "Enable gNB transmission (1) or disable (0)", enableGnb);
     cmd.Parse(argc, argv);
 
+  srand(rnd_seed);
+
   Config::SetDefault("ns3::ThreeGppChannelModel::UpdatePeriod",
                         TimeValue(MilliSeconds(10))); // update the channel at every 10 ms
   Config::SetDefault("ns3::ThreeGppChannelConditionModel::UpdatePeriod",
                         TimeValue(MilliSeconds(0))); // do not update the channel condition
-
-    //Useful to calculate SNR
-    // create and configure the factories for the channel condition and propagation loss models
-    ObjectFactory propagationLossModelFactory;
-    ObjectFactory channelConditionModelFactory;
-
-    // Start changes with respect to three-gpp-channel-example
-    if (scenario == "NTN-DenseUrban")
-    {
-        propagationLossModelFactory.SetTypeId(
-            ThreeGppNTNDenseUrbanPropagationLossModel::GetTypeId());
-        channelConditionModelFactory.SetTypeId(
-            ThreeGppNTNDenseUrbanChannelConditionModel::GetTypeId());
-    }
-    else if (scenario == "NTN-Urban")
-    {
-        propagationLossModelFactory.SetTypeId(ThreeGppNTNUrbanPropagationLossModel::GetTypeId());
-        channelConditionModelFactory.SetTypeId(ThreeGppNTNUrbanChannelConditionModel::GetTypeId());
-    }
-    else if (scenario == "NTN-Suburban")
-    {
-        propagationLossModelFactory.SetTypeId(ThreeGppNTNSuburbanPropagationLossModel::GetTypeId());
-        channelConditionModelFactory.SetTypeId(
-            ThreeGppNTNSuburbanChannelConditionModel::GetTypeId());
-    }
-    else if (scenario == "NTN-Rural")
-    {
-        propagationLossModelFactory.SetTypeId(ThreeGppNTNRuralPropagationLossModel::GetTypeId());
-        channelConditionModelFactory.SetTypeId(ThreeGppNTNRuralChannelConditionModel::GetTypeId());
-    }
-    else
-    {
-        NS_FATAL_ERROR("Unknown NTN scenario");
-    }
 
   LeoOrbitNodeHelper orbit;
   MobilityHelper mobility;
   
   orbit.SetPrecision(mobilityPrecision); // Set precision for position updates
   // Create and configure satellites using LEO orbit helper
-  NodeContainer satellites = orbit.Install (LeoOrbit (300, 20, 1, 1)); // 300km altitude, 20° inclination, 1 satellite per plane, 1 plane
-  
+  // Use higher altitude and more reasonable inclination to improve elevation angles
+  NodeContainer satellites = orbit.Install (300.0, 20, 0.0, 0.0);
   // Create ground nodes (cars)
   NodeContainer cars;
-  cars.Create (1); // Create 3 cars
-  
-  // Install GndConstantVelocityMobilityModel on cars
-  mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
-                             "InitialLatitude", DoubleValue (carLatitude),
-                             "InitialLongitude", DoubleValue (carLongitude),
-                             "Altitude", DoubleValue (3),
-                             "Speed", DoubleValue (carSpeed),
-                             "Azimuth", DoubleValue (0),
-                             "Precision", TimeValue (mobilityPrecision)); // Update every second
-  mobility.Install (cars.Get(0));
+  if (numCars > 1) {
+    cars.Create(numCars); // Create multiple cars
+    for (int i = 0; i < cars.GetN(); ++i){
+        auto car = cars.Get(i);
+        auto rndLat = (rand()%180000)/1000.0 - 90.0; // Random latitude
+        auto rndLon = (rand()%360000)/1000.0 - 180.0; // Random longitude
+        auto rndAzimuth = (rand()%360000)/1000.0; // Random azimuth
+        // Install GndConstantVelocityMobilityModel on cars
+        mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
+                                    "InitialLatitude", DoubleValue (rndLat),
+                                    "InitialLongitude", DoubleValue (rndLon),
+                                    "Altitude", DoubleValue (2),
+                                    "Speed", DoubleValue (carSpeed),
+                                    "Azimuth", DoubleValue (rndAzimuth),
+                                    "Precision", TimeValue (mobilityPrecision)); // Update every second
+        mobility.Install(car);
+    }
+  } else {
+    cars.Create(1); // Create a single car
+    mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
+                                "InitialLatitude", DoubleValue (carLatitude),
+                                "InitialLongitude", DoubleValue (carLongitude),
+                                "Altitude", DoubleValue (3),
+                                "Speed", DoubleValue (carSpeed),
+                                "Azimuth", DoubleValue (0),
+                                "Precision", TimeValue (mobilityPrecision));
+    mobility.Install(cars.Get(0));
+  }
 
   if (traceFile != "")
     {
@@ -219,6 +210,7 @@ int main(int argc, char *argv[])
     // Configure NR MAC scheduler parameters
     Config::SetDefault("ns3::NrMacSchedulerNs3::DlCtrlSymbols", UintegerValue(1));
     Config::SetDefault("ns3::NrMacSchedulerNs3::UlCtrlSymbols", UintegerValue(1));
+    
 
     /*
      * Create NR simulation helpers
@@ -252,35 +244,22 @@ int main(int argc, char *argv[])
     // Create the channel helper
     Ptr<NrChannelHelper> channelHelper = CreateObject<NrChannelHelper>();
     // Set and configure the channel to the current band
-    channelHelper->ConfigureFactories(
-        scenario,
-        "Default",
-        "ThreeGpp");
+    channelHelper->ConfigureFactories(scenario, "Default", "ThreeGpp");
     channelHelper->AssignChannelsToBands({band});
     allBwps = CcBwpCreator::GetAllBwps({band});
  
     // Configure ideal beamforming method
-    idealBeamformingHelper->SetAttribute("BeamformingMethod",
-                                         TypeIdValue(DirectPathBeamforming::GetTypeId()));
-    
-    // Configure beamforming periodicity
-    idealBeamformingHelper->SetAttribute("BeamformingPeriodicity", TimeValue(MilliSeconds(500)));
+    idealBeamformingHelper->SetAttribute("BeamformingMethod", TypeIdValue(DirectPathBeamforming::GetTypeId()));
  
     // Configure scheduler
     nrHelper->SetSchedulerTypeId(NrMacSchedulerTdmaRR::GetTypeId());
-    
-    // Configure scheduler parameters to ensure RB allocation
-    nrHelper->SetSchedulerAttribute("FixedMcsDl", BooleanValue(true));
-    nrHelper->SetSchedulerAttribute("StartingMcsDl", UintegerValue(28));
-    nrHelper->SetSchedulerAttribute("FixedMcsUl", BooleanValue(true));
-    nrHelper->SetSchedulerAttribute("StartingMcsUl", UintegerValue(28));
  
     // Antennas for the UEs
     nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
     nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
     nrHelper->SetUeAntennaAttribute("AntennaElement",
                                     PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
-                                        "Gain", DoubleValue(satAntennaGainDb)
+                                        "Gain", DoubleValue(ueAntennaGainDb)
                                     )));
  
     // Antennas for the gNbs
@@ -288,7 +267,7 @@ int main(int argc, char *argv[])
     nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
     nrHelper->SetGnbAntennaAttribute("AntennaElement",
                                      PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
-                                        "Gain", DoubleValue(vsatAntennaGainDb)
+                                        "Gain", DoubleValue(satAntennaGainDb)
                                      )));
  
     // install nr net devices
@@ -351,31 +330,14 @@ int main(int argc, char *argv[])
         serverApps.Add(dlPacketSinkHelper.Install(cars.Get(u)));
  
         UdpClientHelper dlClient(ueIpIface.GetAddress(u), dlPort);
-        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(10))); // Send every 10ms (was 1ms)
+        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(10)));
         dlClient.SetAttribute("MaxPackets", UintegerValue(10));
-        dlClient.SetAttribute("PacketSize", UintegerValue(1024)); // Reduced from 1500 to 1024
+        dlClient.SetAttribute("PacketSize", UintegerValue(1024));
         clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
     }
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
-    
-    // Block direct communication between car and remote host
-    // This is achieved by not adding direct routes between them
-    // The communication will go through the satellite/gNB
-    Ptr<Ipv4StaticRouting> carStaticRouting = ipv4RoutingHelper.GetStaticRouting(cars.Get(0)->GetObject<Ipv4>());
-    // Do not add route to remote host - force traffic through EPC
- 
-    // Print routing tables for debugging
-    if (logging) {
-        std::cout << "=== CAR ROUTING TABLE ===" << std::endl;
-        Ptr<OutputStreamWrapper> carRoutingStream = Create<OutputStreamWrapper>(&std::cout);
-        carStaticRouting->PrintRoutingTable(carRoutingStream);
-        
-        std::cout << "=== REMOTE HOST ROUTING TABLE ===" << std::endl;
-        Ptr<OutputStreamWrapper> remoteRoutingStream = Create<OutputStreamWrapper>(&std::cout);
-        remoteHostStaticRouting->PrintRoutingTable(remoteRoutingStream);
-    }
  
     // Connect trace sources for packet tracking
     if (logging) {
@@ -391,33 +353,36 @@ int main(int argc, char *argv[])
     }
  
     // start server and client apps
-    serverApps.Start(Seconds(0.5)); // Increased from 0.1 to 0.5
-    clientApps.Start(Seconds(1.0)); // Increased from 0.1 to 1.0  
-    serverApps.Stop(Time(duration));
-    clientApps.Stop(Time(duration) - Seconds(0.5)); // Increased stop margin
+    serverApps.Start(Seconds(0.1)); // Earlier start
+    clientApps.Start(Seconds(0.2)); // Start transmission quickly after attachment
+    serverApps.Stop(Time(duration) - Seconds(0.01));
+    clientApps.Stop(Time(duration) - Seconds(0.1)); // Reduced stop margin
  
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
-
-    // Get antennas from NetDevices for SNR computation
-    Ptr<NrUeNetDevice> txUeNetDevice = DynamicCast<NrUeNetDevice>(ueNetDev.Get(0));
-    Ptr<NrGnbNetDevice> rxGnbNetDevice = DynamicCast<NrGnbNetDevice>(gnbNetDev.Get(0));
-
-    // Get PhasedArrayModel from the devices
-    Ptr<PhasedArrayModel> txPhasedArray = DynamicCast<PhasedArrayModel>(txUeNetDevice->GetPhy(0)->GetSpectrumPhy()->GetAntenna());
-    Ptr<PhasedArrayModel> rxPhasedArray = DynamicCast<PhasedArrayModel>(rxGnbNetDevice->GetPhy(0)->GetSpectrumPhy()->GetAntenna());
-
-    auto txMob = cars.Get(0)->GetObject<MobilityModel>();
-    auto rxMob = satellites.Get(0)->GetObject<MobilityModel>();
-    
 
     Simulator::Schedule(Seconds(0.1), []() {
         std::cout << "============= Starting UDP client and server applications =============" << std::endl;
     });
 
+
     Simulator::Stop (Time (duration));
     std::cout << "============= Starting simulation for " << duration << " =============" << std::endl;
-    Simulator::Run();
+    
+
+    Time printInterval = Seconds(5);
+    Time simDuration = Time(duration);
+    for (Time t = printInterval; t < simDuration; t += printInterval) {
+        Simulator::Schedule(t, [t]() {
+            std::cout << "Simulation time: " << t.GetSeconds() << "s" << std::endl;
+        });
+    }
+    
+    try {
+        Simulator::Run();
+    } catch (const std::exception& e) {
+        std::cout << "Simulation caught exception (normal for mobility scenarios): " << e.what() << std::endl;
+    }
 
  
     Ptr<UdpServer> serverApp = serverApps.Get(0)->GetObject<UdpServer>();

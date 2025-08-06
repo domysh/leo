@@ -72,6 +72,10 @@ public:
    */
   NodeContainer Install (const LeoOrbit &orbit);
 
+  NodeContainer
+  Install (const double &altitude, const double &inclination,
+        const double &longitude, const double &offset, const bool &retrograde = false);
+
   /**
    * Set an attribute for each node
    *

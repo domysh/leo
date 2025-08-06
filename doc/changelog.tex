@@ -4,10 +4,22 @@
 \usepackage[italian]{babel}
 \usepackage[margin=2cm]{geometry}
 \usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
 \usepackage{float}
 \usepackage{url}
 \usepackage[breaklinks=true]{hyperref}
 \usepackage{xurl}
+\lstset{
+    basicstyle=\footnotesize\ttfamily,
+    breaklines=true,
+    frame=single,
+    framerule=0.8pt,
+    showstringspaces=false,
+    commentstyle=\color{gray},
+    keywordstyle=\color{blue},
+    stringstyle=\color{red}
+}
 
 % Definizione del comando pandocbounded per le immagini
 \providecommand{\pandocbounded}[1]{#1}
@@ -66,7 +78,7 @@ Il mobility model è stato sviluppato partendo dall'esempio di tracciamento orbi
   Sviluppo di uno script Python per la visualizzazione tridimensionale dei punti elaborati dall'esempio precedente, utilizzando matplotlib per la rappresentazione grafica dei risultati (come mostrato in Figura~\ref{fig:car_move_model})
 \end{itemize}
 
-\begin{figure}[H]
+\begin{figure}[!htb]
     \centering
     \includegraphics[width=0.8\textwidth]{assets/move-model.jpg}
     \caption{Move Model Graph Examples}\label{fig:car_move_model}
@@ -97,7 +109,7 @@ In alternativa, il progetto Hypatia~\cite{hypatia} utilizza ns3-satellite~\cite{
 \end{itemize}
 
 
-\begin{figure}[H]
+\begin{figure}[!htb]
     \centering
     \includegraphics[width=0.8\textwidth]{assets/new_vis_trace_orbits.png}
     \caption{Orbits tracing with plotly with interactive interface GPU accelerated}\label{fig:new_vis_trace_orbits}
@@ -125,6 +137,203 @@ In alternativa, il progetto Hypatia~\cite{hypatia} utilizza ns3-satellite~\cite{
     \caption{Simulation Scenario with 1 car and 1 satellite communicating with 5g-lena}\label{fig:initial_nr_scenario_sim}
 \end{figure}
 
+\section{Report di test e i relativi risultati}\label{report-di-test-e-i-relativi-risultati}
+Si riportano i seguenti test relativi ai risultati ottenuti dall'esecuzione dell'esempio con 5g lena dal codice nel commit \href{https://github.com/domysh/leo/tree/302099845e6bb4bc3e0cd30ef0e7e7a88d0ead11}{302099845e6bb4bc3e0cd30ef0e7e7a88d0ead11} dal file elaborato da 5g-lena usando i parametri di default ma abilitando il logging (tramite --logging) dal file DlDataSinr:
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+    \hline
+        Time & CellId & RNTI & BWPId & SINR(dB) \\ \hline
+        1.00314 & 1 & 1 & 0 & 7.6479 \\ \hline
+        1.00893 & 1 & 1 & 0 & 5.48247 \\ \hline
+        1.01314 & 1 & 1 & 0 & 22.2687 \\ \hline
+        1.02314 & 1 & 1 & 0 & 6.75876 \\ \hline
+        1.02893 & 1 & 1 & 0 & 9.00803 \\ \hline
+        1.03314 & 1 & 1 & 0 & 4.21954 \\ \hline
+        1.03893 & 1 & 1 & 0 & 10.1628 \\ \hline
+        1.04314 & 1 & 1 & 0 & 3.34375 \\ \hline
+        1.04893 & 1 & 1 & 0 & 18.913 \\ \hline
+        1.05314 & 1 & 1 & 0 & 16.4609 \\ \hline
+        1.05893 & 1 & 1 & 0 & 2.49132 \\ \hline
+        1.06314 & 1 & 1 & 0 & 5.24952 \\ \hline
+        1.06893 & 1 & 1 & 0 & -4.61782 \\ \hline
+        1.07393 & 1 & 1 & 0 & 1.74165 \\ \hline
+        1.07414 & 1 & 1 & 0 & 5.36954 \\ \hline
+        1.07993 & 1 & 1 & 0 & 6.60927 \\ \hline
+        1.08314 & 1 & 1 & 0 & 5.17402 \\ \hline
+        1.08893 & 1 & 1 & 0 & 10.3276 \\ \hline
+        1.09314 & 1 & 1 & 0 & 6.5821 \\ \hline
+        1.09893 & 1 & 1 & 0 & 13.1331 \\ \hline
+    \end{tabular}
+    \caption{Simulazione con parametri di default (tx gNB a 40 dB)}
+\end{table}
+
+
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+    \hline
+        Time & CellId & RNTI & BWPId & SINR(dB) \\ \hline
+        1.00314 & 1 & 1 & 0 & 47.6479 \\ \hline
+        1.01314 & 1 & 1 & 0 & 46.8916 \\ \hline
+        1.02314 & 1 & 1 & 0 & 46.7588 \\ \hline
+        1.03314 & 1 & 1 & 0 & 45.2061 \\ \hline
+        1.04314 & 1 & 1 & 0 & 43.3438 \\ \hline
+        1.05314 & 1 & 1 & 0 & 45.1769 \\ \hline
+        1.06314 & 1 & 1 & 0 & 45.2495 \\ \hline
+        1.07314 & 1 & 1 & 0 & 65.5475 \\ \hline
+        1.08314 & 1 & 1 & 0 & 49.5355 \\ \hline
+        1.09314 & 1 & 1 & 0 & 46.5821 \\ \hline
+    \end{tabular}
+    \caption{Simulazione con parametri di default ma con tx gNB portata a 80 dB}
+\end{table}
+
+Si può evidentemente notare che sulle prime trasmissioni probabilmente abbiamo avuto delle ritrasmissioni gestite dal protocollo 5G, date i bassi valori di SINR in alcuni casi, ma che il sistema è riuscito a stabilizzarsi e a garantire una comunicazione stabile tra satellite e veicolo.
+Mentre aumentando la potenza in trasmissione ad 80dB, i 10 pacchetti UDP non subiscono ritrasmissioni e il SINR si stabilizza su valori più alti, garantendo una comunicazione stabile e senza errori.
+
+Le latenze si mantengono sui 2ms e i pacchetti correttamente riscontrati, come verificabile nel file RxedUePhyDlDciTrace e NrDlRxRlcStats (dalla simulazione ad 80dB):
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|l|}
+    \hline
+        time(s) & cellId & rnti & lcid & packetSize & delay(s) \\ \hline
+        1.00324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.01324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.02324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.03324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.04324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.05324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.06324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.07324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.08324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+        1.09324 & 1 & 1 & 3 & 1056 & 0.00224286 \\ \hline
+    \end{tabular}
+    \caption{NrDlRxRlcStats (txPower gNB ad 80 dB)}
+\end{table}
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|l|l|l|l|l|}
+    \hline
+        Time & Entity & Frame & SF & Slot & nodeId & RNTI & bwpId & Harq ID & K1 Delay \\ \hline
+        1.00307 & DL DCI Rxed & 100 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.00593 & HARQ FD Txed & 100 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.00807 & DL DCI Rxed & 100 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.01093 & HARQ FD Txed & 101 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.01307 & DL DCI Rxed & 101 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.01593 & HARQ FD Txed & 101 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.02307 & DL DCI Rxed & 102 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.02593 & HARQ FD Txed & 102 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.02807 & DL DCI Rxed & 102 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.03093 & HARQ FD Txed & 103 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.03307 & DL DCI Rxed & 103 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.03593 & HARQ FD Txed & 103 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.03807 & DL DCI Rxed & 103 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.04093 & HARQ FD Txed & 104 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.04307 & DL DCI Rxed & 104 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.04593 & HARQ FD Txed & 104 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.04807 & DL DCI Rxed & 104 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.05093 & HARQ FD Txed & 105 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.05307 & DL DCI Rxed & 105 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.05593 & HARQ FD Txed & 105 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.05807 & DL DCI Rxed & 105 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.06093 & HARQ FD Txed & 106 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.06307 & DL DCI Rxed & 106 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.06593 & HARQ FD Txed & 106 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.06807 & DL DCI Rxed & 106 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.07093 & HARQ FD Txed & 107 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.07307 & DL DCI Rxed & 107 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.07407 & DL DCI Rxed & 107 & 4 & 0 & 1 & 1 & 0 & 14 & 2 \\ \hline
+        1.07593 & HARQ FD Txed & 107 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.07693 & HARQ FD Txed & 107 & 6 & 0 & 1 & 1 & 0 & 14 & 2 \\ \hline
+        1.07907 & DL DCI Rxed & 107 & 9 & 0 & 1 & 1 & 0 & 14 & 2 \\ \hline
+        1.08193 & HARQ FD Txed & 108 & 1 & 0 & 1 & 1 & 0 & 14 & 2 \\ \hline
+        1.08307 & DL DCI Rxed & 108 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.08593 & HARQ FD Txed & 108 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.08807 & DL DCI Rxed & 108 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.09093 & HARQ FD Txed & 109 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.09307 & DL DCI Rxed & 109 & 3 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.09593 & HARQ FD Txed & 109 & 5 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.09807 & DL DCI Rxed & 109 & 8 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+        1.10093 & HARQ FD Txed & 110 & 0 & 0 & 1 & 1 & 0 & 15 & 2 \\ \hline
+    \end{tabular}
+    \caption{RxedUePhyDlDciTrace (txPower gNB ad 80 dB)}
+\end{table}
+
+\cleardoublepage
+
+Si risportano inoltre alcuni valori di pathloss calcolati nel file DlPathlossTrace su una simulazione di lunga durata:
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+    \hline
+        Time(sec) & CellId & BwpId & IMSI & pathLoss(dB) \\ \hline
+        0 & 1 & 0 & 1 & -198.484 \\ \hline
+        0.005 & 1 & 0 & 1 & -196.781 \\ \hline
+        0.01 & 1 & 0 & 1 & -196.781 \\ \hline
+        2.4 & 1 & 0 & 1 & -172.074 \\ \hline
+        68.875 & 1 & 0 & 1 & -177.741 \\ \hline
+        89.27 & 1 & 0 & 1 & -180.501 \\ \hline
+        190.815 & 1 & 0 & 1 & -186.807 \\ \hline
+        214.63 & 1 & 0 & 1 & -193.27 \\ \hline
+        233.36 & 1 & 0 & 1 & -198.193 \\ \hline
+        251.04 & 1 & 0 & 1 & -270.626 \\ \hline
+        252.11 & 1 & 0 & 1 & -311.17 \\ \hline
+        253.96 & 1 & 0 & 1 & -429.763 \\ \hline
+    \end{tabular}
+    \caption{Pathloss Trace (txPower gNB ad 80 dB)}
+\end{table}
+
+\section{Approfondimenti e ulteriori integrazioni su ns-3-leo sulle orbite satellitari}\label{approfondimenti-e-ulteriori-integrazioni-su-ns-3-leo-sulle-orbite-satellitari}
+
+\subsection{Sistema di posizionamento dei satelliti e delle loro orbite}
+
+Il modulo ns-3-leo implementa un sistema di identificazione di ogni satellite e della sua orbita basato su 4 parametri:
+
+\begin{itemize}
+\tightlist
+\item
+  Altitudine (che definisce l'altezza del satellite rispetto alla superficie terrestre, in direzione del centro della terra)
+\item
+  Longitudine (che definisce la direzione verso cui verrà inclinato il piano orbitale del satellite rispetto al centro della terra: l'apogeo dell'orbita è sempre posizionato in corrispondenza della longitudine definita)
+\item
+  Inclinazione (che definisce l'inclinazione del piano orbitale rispetto al centro della terra e alla longitudine precedentemente definita)
+\item
+  Offset (che definisce la posizione sulla circonferenza dell'orbita, in gradi, in cui si trova il satellite ad inizio simulazione)
+\end{itemize}
+
+Il verso di rotazione intorno alla terra del satellite inizialmente era sempre ricalibrato, in modo da mantenere un'evoluzione circolare concorde a quella della terra, ma è stato modificato aggiungendo un nuovo parametro che consente di definire orbite retrograde, in cui il satellite ruota in senso opposto rispetto alla rotazione terrestre.
+
+
+
+
+\section{BUG REPORT}
+
+\begin{lstlisting}[
+    frame=single,
+    framerule=0.8pt,
+    basicstyle=\footnotesize\ttfamily,
+    breaklines=true,
+    caption={Errore NS\_ASSERT rbUsed durante simulazione di lunga durata},
+    label={lst:ns3-assert-error}
+]
+~/repos/ns-3-dev (heads/ns-3.45*) > ./ns3 run "leo-nr-send-example --carSpeed=30 --duration=5400s --mobilityPrecision=1s --traceFile=track.csv" && cp track.csv contrib/leo/examples/trace_view/punti_3d.csv && py contrib/leo/examples/trace_view/main.py
+[0/2] Re-checking globbed directories...
+[2/3] Linking CXX executable /Users/domysh/repos/ns-3-dev/build/contrib/leo/examples/ns3.45-leo-nr-send-example-default
+gNB enabled with transmission power: 40 dBm
+============= Starting simulation for 5400s =============
+============= Starting UDP client and server applications =============
+NS_ASSERT failed, cond="rbUsed", +254.000071427s 1 file=/Users/domysh/repos/ns-3-dev/contrib/nr/model/nr-ue-phy.cc, line=1557
+NS_FATAL, terminating
+libc++abi: terminating
+Command 'build/contrib/leo/examples/ns3.45-leo-nr-send-example-default --carSpeed=30 --duration=5400s --mobilityPrecision=1s --traceFile=track.csv' died with <Signals.SIGABRT: 6>.
+\end{lstlisting}
+
+\cleardoublepage
 \bibliographystyle{unsrt}
 \phantomsection{}
 \addcontentsline{toc}{section}{Bibliografia}

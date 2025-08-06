@@ -19,6 +19,7 @@
 #include "math.h"
 
 #include "ns3/double.h"
+#include "ns3/boolean.h"
 #include "ns3/simulator.h"
 #include "ns3/geographic-positions.h"
 #include "leo-circular-orbit-mobility-model.h"
@@ -46,18 +47,32 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::SetAltitude,
                    		       &LeoCircularOrbitMobilityModel::GetAltitude),
                    MakeDoubleChecker<double> ())
-    // TODO check value limits
     .AddAttribute ("Inclination",
                    "The inclination of the orbital plane in degrees",
                    DoubleValue (10.0),
                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::SetInclination,
                    		       &LeoCircularOrbitMobilityModel::GetInclination),
-                   MakeDoubleChecker<double> ())
+                   MakeDoubleChecker<double> (0.0, 180.0))
     .AddAttribute ("Precision",
                    "The time precision with which to compute position updates. 0 means arbitrary precision",
                    TimeValue (Seconds (1)),
                    MakeTimeAccessor (&LeoCircularOrbitMobilityModel::SetPrecision),
-                   MakeTimeChecker ());
+                   MakeTimeChecker ())
+    .AddAttribute ("Longitude",
+                   "The longitude offset of the satellite in degrees",
+                    DoubleValue (0.0),
+                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::m_longitude),
+                    MakeDoubleChecker<double> (-180.0, 180.0))
+    .AddAttribute ("RetrogradeOrbit",
+                    "If true, the satellite moves in the opposite direction of the Earth's rotation",
+                    BooleanValue (false),
+                    MakeBooleanAccessor (&LeoCircularOrbitMobilityModel::m_retrogradeOrbit),
+                    MakeBooleanChecker ())
+    .AddAttribute ("Offset",
+                   "The initial offset of the satellite in degrees",
+                   DoubleValue (0.0),
+                   MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::m_offset),
+                   MakeDoubleChecker<double> (-180.0, 180.0));
     TypeId::AttributeInformation notToUse;
     tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
     notToUse.supportLevel = TypeId::SupportLevel::OBSOLETE;
@@ -76,6 +91,7 @@ LeoCircularOrbitMobilityModel::~LeoCircularOrbitMobilityModel()
 double
 LeoCircularOrbitMobilityModel::GetSpeed () const
 {
+  NS_LOG_FUNCTION_NOARGS ();
   return sqrt (LEO_EARTH_GM_KM_E10 / m_orbitHeight) * 1e5;
 }
 
@@ -97,12 +113,14 @@ LeoCircularOrbitMobilityModel::DoGetVelocity () const
 Vector
 LeoCircularOrbitMobilityModel::GetVelocity () const
 {
+  NS_LOG_FUNCTION_NOARGS ();
   return DoGetVelocity ();
 }
 
 Vector
 LeoCircularOrbitMobilityModel::GetGeocentricVelocity () const
 {
+  NS_LOG_FUNCTION_NOARGS ();
   return DoGetGeocentricVelocity ();
 }
 
@@ -118,12 +136,15 @@ LeoCircularOrbitMobilityModel::PlaneNorm () const
 double
 LeoCircularOrbitMobilityModel::GetProgress (Time t) const
 {
-  int sign = 1;
+
+  NS_LOG_FUNCTION (this << t);
   // ensure correct gradient (not against earth rotation)
-  if (m_inclination > M_PI/2)
-    {
-      sign = -1;
-    }
+  int sign = (m_inclination > M_PI/2) ? -1 : 1;
+  
+  if (m_retrogradeOrbit) {
+    sign *= -1;
+  }
+
   // 2pi * (distance travelled / circumference of earth) + offset
   return sign * (((GetSpeed () * t.GetSeconds ()) / GeographicPositions::EARTH_SPHERE_RADIUS)) + m_offset;
 }
@@ -180,6 +201,7 @@ void LeoCircularOrbitMobilityModel::SetPrecision (Time precision) {
 Vector
 LeoCircularOrbitMobilityModel::DoGetPosition (void) const
 {
+  NS_LOG_FUNCTION_NOARGS ();
   return CartesianToTopocentric(DoGetGeocentricPosition(), GetCoordinateTranslationReferencePoint(), GeographicPositions::SPHERE);
 }
 

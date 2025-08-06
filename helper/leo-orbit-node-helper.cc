@@ -24,6 +24,7 @@
 #include "ns3/waypoint.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/double.h"
+#include "ns3/boolean.h"
 #include "ns3/integer.h"
 
 #include "leo-orbit-node-helper.h"
@@ -67,6 +68,26 @@ LeoOrbitNodeHelper::Install (const LeoOrbit &orbit)
   c.Create (orbit.sats*orbit.planes);
   mobility.Install (c);
 
+  return c;
+}
+
+NodeContainer
+LeoOrbitNodeHelper::Install (const double &altitude, const double &inclination,
+      const double &longitude, const double &offset, const bool &retrograde){
+  NS_LOG_FUNCTION (this << altitude << inclination << longitude << offset);
+
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
+             "Precision", TimeValue (m_precision),
+  			     "Altitude", DoubleValue (altitude),
+  			     "Inclination", DoubleValue (inclination),
+            "Longitude", DoubleValue (longitude),
+            "Offset", DoubleValue (offset),
+          "RetrogradeOrbit", BooleanValue (retrograde));
+
+  NodeContainer c;
+  c.Create (1);
+  mobility.Install (c);
   return c;
 }
 
