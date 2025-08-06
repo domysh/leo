@@ -62,7 +62,8 @@ LeoOrbitNodeHelper::Install (const LeoOrbit &orbit)
   mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
              "Precision", TimeValue (m_precision),
   			     "Altitude", DoubleValue (orbit.alt),
-  			     "Inclination", DoubleValue (orbit.inc));
+  			     "Inclination", DoubleValue (orbit.inc),
+             "SkipSetPosition", BooleanValue (false));
 
   NodeContainer c;
   c.Create (orbit.sats*orbit.planes);
@@ -78,12 +79,13 @@ LeoOrbitNodeHelper::Install (const double &altitude, const double &inclination,
 
   MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
-             "Precision", TimeValue (m_precision),
-  			     "Altitude", DoubleValue (altitude),
-  			     "Inclination", DoubleValue (inclination),
-            "Longitude", DoubleValue (longitude),
-            "Offset", DoubleValue (offset),
-          "RetrogradeOrbit", BooleanValue (retrograde));
+    "Precision", TimeValue (m_precision),
+    "Altitude", DoubleValue (altitude),
+    "Inclination", DoubleValue (inclination),
+    "Longitude", DoubleValue (longitude),
+    "Offset", DoubleValue (offset),
+    "RetrogradeOrbit", BooleanValue (retrograde)
+  );
 
   NodeContainer c;
   c.Create (1);

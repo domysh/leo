@@ -72,7 +72,7 @@ It sets the positions of the satellites according to their orbit definitions, wh
   // using CSV file
   satellites = orbit.Install ("orits.csv");
 
-  // defining orbits in code (height, inclination, satellites per plane, number of planes)
+  // defining orbits in code (height, inclination, number of planes, satellites per plane)
   satellites = orbit.Install ({ LeoOrbit (1200, 20, 32, 16),
                                 LeoOrbit (1180, 30, 12, 10) });
 

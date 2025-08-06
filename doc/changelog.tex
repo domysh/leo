@@ -308,7 +308,31 @@ Il modulo ns-3-leo implementa un sistema di identificazione di ogni satellite e 
 
 Il verso di rotazione intorno alla terra del satellite inizialmente era sempre ricalibrato, in modo da mantenere un'evoluzione circolare concorde a quella della terra, ma è stato modificato aggiungendo un nuovo parametro che consente di definire orbite retrograde, in cui il satellite ruota in senso opposto rispetto alla rotazione terrestre.
 
+La nuova funzione \textit{LeoOrbitNodeHelper::Install (300.0, 20, 90., 180.0, false);}, ad esempio posiziona un satellite a 300 km di altitudine, con inclinazione di 20 gradi, longitudine di 90 gradi e offset di 180 gradi, con rotazione normale (non retrograda, in senso anti-orario), pertanto il satellite si troverà sulla parte più `bassa' dell'orbita a -20° di inclinazione rispetto al piano equatoriale terrestre, in direzione della longitudine di 90° come mostrato in Figura~\ref{fig:sat_custom_positioning}.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{assets/sat_custom_positioning.png}
+    \caption{Satellite Custom Positioning Install Function: \textit{LeoOrbitNodeHelper::Install (300.0, 20, 90., 180.0, false);}}\label{fig:sat_custom_positioning}
+\end{figure}
+
+Di default ns-3 leo tramite LeoOrbitNodeHelper posiziona i satelliti consentendo di specificare solo l'altitudine, l'inclinazione, il numero di \textit{piani} e i satelliti per \textit{piano}. (Si evidenzia come nel README originale del progetto l'ordine di questi parametri sia errato)
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{assets/leo_orbit_more_planes.png}
+    \caption{\textit{LeoOrbitNodeHelper::Install (LeoOrbit(300.0, 20, 5, 1));}}\label{fig:sat_custom_positioning_more_planes}
+\end{figure}
+
+Come è possibile vedere nella Figura~\ref{fig:sat_custom_positioning_more_planes}, il sistema posiziona i satelliti in 5 piani, con inclinazione di 20 gradi, e distribuisce i satelliti equidistantemente dai -180° ai 180° di longitudine, con un offset di 0 gradi, in modo da avere i satelliti distribuiti su diverse orbite spaziati in latitudine di 360/5=72° gradi.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{assets/leo_orbit_more_sats.png}
+    \caption{\textit{LeoOrbitNodeHelper::Install (LeoOrbit(300.0, 20, 1, 5));}}\label{fig:sat_custom_positioning_more_sats}
+\end{figure}
+
+Mentre modificando il parametro del numero di satelliti per piano, come in Figura~\ref{fig:sat_custom_positioning_more_sats}, il sistema posiziona 5 satelliti equidistanti su un singolo piano orbitale, con inclinazione di 20 gradi e altitudine di 300 km, con offset incrementale di 72° di offset tra i satelliti sulla stessa circonferenza orbitale.
 
 
 \section{BUG REPORT}
@@ -332,6 +356,44 @@ NS_FATAL, terminating
 libc++abi: terminating
 Command 'build/contrib/leo/examples/ns3.45-leo-nr-send-example-default --carSpeed=30 --duration=5400s --mobilityPrecision=1s --traceFile=track.csv' died with <Signals.SIGABRT: 6>.
 \end{lstlisting}
+
+\begin{lstlisting}[
+    frame=single,
+    framerule=0.8pt,
+    basicstyle=\footnotesize\ttfamily,
+    breaklines=true,
+    caption={Se la posizione è la medesima, accade che eseguiamo 0/0 e abbiamo NaN come risultato},
+    label={lst:ns3-position-error}
+]
+double
+GeocentricConstantPositionMobilityModel::DoGetElevationAngle(
+    Ptr<const GeocentricConstantPositionMobilityModel> other)
+{
+    Vector me = this->DoGetGeocentricPosition();
+    Vector them = other->DoGetGeocentricPosition();
+
+    // a is assumed to be the terminal with the lowest altitude
+    Vector& a = (me.z < them.z ? me : them);
+    Vector& b = (me.z < them.z ? them : me);
+
+    Vector bMinusA = b - a;
+    double numerator = std::abs(a * bMinusA);
+    double denominator = a.GetLength() * bMinusA.GetLength();
+    double x = numerator / denominator;
+
+    // Enforce the appropriate domain range ([-1, 1]) for the argument of std::asin.
+    x = std::min(x, 1.0);
+    x = std::max(x, -1.0);
+
+    // asin returns radians, we convert to degrees
+    double elevAngle = std::abs((180.0 * M_1_PI) * asin(x));
+
+    return elevAngle;
+}
+\end{lstlisting}
+
+
+
 
 \cleardoublepage
 \bibliographystyle{unsrt}

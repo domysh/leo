@@ -120,6 +120,11 @@ private:
   double m_offset;
 
   /**
+   * Disable SetPosition Flag (useful when offset or longitude is set)
+   */
+  bool m_disableSetPosition = false;
+
+  /**
    * Retrograde orbit flag
    */
   bool m_retrogradeOrbit = false;
@@ -148,6 +153,31 @@ private:
    * \return the current velocity.
    */
   virtual Vector DoGetVelocity (void) const override;
+
+  /**
+   * \brief Set the current longitude
+   * \param longitude the longitude to set in deg
+   */
+  void SetLongitude (double longitude);
+
+  /**
+   * \brief Get the current longitude
+   * \return the current longitude in deg
+   */
+  double GetLongitude () const;
+
+  /**
+   * \brief Set the current offset
+   * \param offset the offset to set in deg
+   */
+  void SetOffset (double offset);
+
+  /**
+   * \brief Get the current offset
+   * \return the current offset in deg
+   */
+  double GetOffset () const;
+
   /**
    * \brief Get geographic velocity
    * \return the current geographic velocity.

@@ -61,7 +61,8 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
     .AddAttribute ("Longitude",
                    "The longitude offset of the satellite in degrees",
                     DoubleValue (0.0),
-                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::m_longitude),
+                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::SetLongitude,
+                              &LeoCircularOrbitMobilityModel::GetLongitude),
                     MakeDoubleChecker<double> (-180.0, 180.0))
     .AddAttribute ("RetrogradeOrbit",
                     "If true, the satellite moves in the opposite direction of the Earth's rotation",
@@ -71,8 +72,14 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
     .AddAttribute ("Offset",
                    "The initial offset of the satellite in degrees",
                    DoubleValue (0.0),
-                   MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::m_offset),
-                   MakeDoubleChecker<double> (-180.0, 180.0));
+                   MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::SetOffset,
+                   		       &LeoCircularOrbitMobilityModel::GetOffset),
+                   MakeDoubleChecker<double> (0, 360.0))
+    .AddAttribute ("SkipSetPosition",
+                   "If true, the SetPosition method will not be called when longitude or offset is set",
+                   BooleanValue (true),
+                   MakeBooleanAccessor (&LeoCircularOrbitMobilityModel::m_disableSetPosition),
+                   MakeBooleanChecker ());
     TypeId::AttributeInformation notToUse;
     tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
     notToUse.supportLevel = TypeId::SupportLevel::OBSOLETE;
@@ -86,6 +93,29 @@ LeoCircularOrbitMobilityModel::LeoCircularOrbitMobilityModel() : GeocentricConst
 
 LeoCircularOrbitMobilityModel::~LeoCircularOrbitMobilityModel()
 {
+}
+
+void LeoCircularOrbitMobilityModel::SetLongitude (double longitude){
+  NS_LOG_FUNCTION (this << longitude);
+  m_longitude = DegreesToRadians(longitude);
+  Update();
+}
+
+double LeoCircularOrbitMobilityModel::GetLongitude () const
+{
+  NS_LOG_FUNCTION_NOARGS ();
+  return RadiansToDegrees(m_longitude);
+}
+
+void LeoCircularOrbitMobilityModel::SetOffset (double offset){
+  NS_LOG_FUNCTION (this << offset);
+  m_offset = DegreesToRadians(offset);
+  Update();
+}
+
+double LeoCircularOrbitMobilityModel::GetOffset() const{
+  NS_LOG_FUNCTION_NOARGS ();
+  return RadiansToDegrees(m_offset);
 }
 
 double
@@ -212,6 +242,9 @@ LeoCircularOrbitMobilityModel::DoSetPosition (const Vector &position)
   // this works nicely with MobilityHelper and GetPostion will still get the
   // correct position, but be aware that it will not be the same as supplied to
   // SetPostion (see LeoCircularOrbitPostionAllocator to understand how it works)
+  
+  if (m_disableSetPosition) return; // Not skipped when using Leo Position Allocators
+
   m_longitude = position.x;
   m_offset = position.y;
   Update ();

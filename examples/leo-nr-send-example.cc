@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
   srand(rnd_seed);
 
   Config::SetDefault("ns3::ThreeGppChannelModel::UpdatePeriod",
-                        TimeValue(MilliSeconds(10))); // update the channel at every 10 ms
+                        TimeValue(MilliSeconds(100))); // update the channel at every 10 ms
   Config::SetDefault("ns3::ThreeGppChannelConditionModel::UpdatePeriod",
                         TimeValue(MilliSeconds(0))); // do not update the channel condition
 
@@ -128,8 +128,7 @@ int main(int argc, char *argv[])
   
   orbit.SetPrecision(mobilityPrecision); // Set precision for position updates
   // Create and configure satellites using LEO orbit helper
-  // Use higher altitude and more reasonable inclination to improve elevation angles
-  NodeContainer satellites = orbit.Install (300.0, 20, 0.0, 0.0);
+  NodeContainer satellites = orbit.Install (300.0, 20, 90., 180.0, false);
   // Create ground nodes (cars)
   NodeContainer cars;
   if (numCars > 1) {
@@ -378,11 +377,7 @@ int main(int argc, char *argv[])
         });
     }
     
-    try {
-        Simulator::Run();
-    } catch (const std::exception& e) {
-        std::cout << "Simulation caught exception (normal for mobility scenarios): " << e.what() << std::endl;
-    }
+    Simulator::Run();
 
  
     Ptr<UdpServer> serverApp = serverApps.Get(0)->GetObject<UdpServer>();
