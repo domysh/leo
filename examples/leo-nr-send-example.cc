@@ -3,6 +3,8 @@
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <map>
+#include <sstream>
 
 #include "ns3/leo-module.h"
 #include "ns3/leo-ground-node-helper.h"
@@ -27,6 +29,9 @@ static std::ofstream traceFileOutputStream;
 static bool logging = false; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
 
+// Map to store transmission times for delay calculation
+static std::map<uint32_t, Time> packetTxTimeMap;
+
 
 // Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
 //
@@ -48,27 +53,140 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
 
 void PacketSinkRxTrace(std::string context, Ptr<const Packet> packet)
 {
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] PacketSink RX: " 
-              << packet->GetSize() << " bytes at " << context << std::endl;
+    uint32_t packetId = packet->GetUid();
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            std::string nodeId = context.substr(nodePos + 10, endPos - nodePos - 10);
+            nodeInfo = " [Car Node" + nodeId + "]";
+        }
+    }
+    
+    // Calculate delay if we have the transmission time
+    std::string delayStr = "N/A";
+    if (packetTxTimeMap.find(packetId) != packetTxTimeMap.end()) {
+        Time delay = currentTime - packetTxTimeMap[packetId];
+        delayStr = std::to_string(delay.GetMilliSeconds()) + "ms";
+        // Remove from map to save memory
+        packetTxTimeMap.erase(packetId);
+    }
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] UDP RX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "Delay=" << delayStr << ", "
+              << "Context=" << context << std::endl;
 }
 
 void UdpClientTxTrace(std::string context, Ptr<const Packet> packet)
 {
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] UdpClient TX: " 
-              << packet->GetSize() << " bytes at " << context << std::endl;
+    uint32_t packetId = packet->GetUid();
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            std::string nodeId = context.substr(nodePos + 10, endPos - nodePos - 10);
+            nodeInfo = " [RemoteHost Node" + nodeId + "]";
+        }
+    }
+    
+    // Store transmission time for delay calculation
+    packetTxTimeMap[packetId] = currentTime;
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] UDP TX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "PacketId=" << packetId << ", "
+              << "Context=" << context << std::endl;
+}
+
+#include "ns3/nr-pdcp-header.h" // Include the PDCP header definition
+#include "ns3/packet.h"
+#include <iostream>
+
+void
+TxDataTrace (std::string context, Ptr<const Packet> p, const ns3::Address& addr)
+{
+    // Determine if this is gNB or UE based on context
+    std::string deviceType = "5G";
+    if (context.find("NrGnbNetDevice") != std::string::npos) {
+        deviceType = "gNB (Satellite)";
+    } else if (context.find("NrUeNetDevice") != std::string::npos) {
+        deviceType = "UE (Car)";
+    }
+    
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] " << deviceType << " TX: " 
+          << "Size=" << p->GetSize() << " bytes, "
+          << "Destination=" << addr << ", "
+          << "Context=" << context << std::endl;
+}
+
+void
+RxDataTrace (std::string context, Ptr<const Packet> p)
+{
+    // Determine if this is gNB or UE based on context
+    std::string deviceType = "5G";
+    if (context.find("NrGnbNetDevice") != std::string::npos) {
+        deviceType = "gNB (Satellite)";
+    } else if (context.find("NrUeNetDevice") != std::string::npos) {
+        deviceType = "UE (Car)";
+    }
+    
+    std::cout << "[" << Simulator::Now().GetSeconds() << "s] " << deviceType << " RX: " 
+          << "Size=" << p->GetSize() << " bytes, "
+          << "Context=" << context << std::endl;
 }
 
 void PointToPointTxTrace(std::string context, Ptr<const Packet> packet)
 {
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] P2P TX: " 
-              << packet->GetSize() << " bytes at " << context << std::endl;
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID from context for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            nodeInfo = " Node" + context.substr(nodePos + 10, endPos - nodePos - 10);
+        }
+    }
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] P2P TX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "Context=" << context << std::endl;
 }
 
 void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
 {
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] P2P RX: " 
-              << packet->GetSize() << " bytes at " << context << std::endl;
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID from context for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            nodeInfo = " Node" + context.substr(nodePos + 10, endPos - nodePos - 10);
+        }
+    }
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] P2P RX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "Context=" << context << std::endl;
 }
+
+
 int main(int argc, char *argv[])
 {
 
@@ -170,36 +288,7 @@ int main(int argc, char *argv[])
                        MakeCallback (&CourseChange));
       traceFileOutputStream << "Time,Node,X,Y,Z,Speed,Latitude,Longitude,Altitude" << std::endl;
     }
-  if (logging)
-    {
-        // Propagation and Channel Models
-        //LogComponentEnable("ThreeGppPropagationLossModel", LOG_LEVEL_LOGIC);
-        //LogComponentEnable ("ThreeGppSpectrumPropagationLossModel", LOG_LEVEL_LOGIC);
-        //LogComponentEnable ("ThreeGppChannelModel", LOG_LEVEL_LOGIC);
-        //LogComponentEnable ("ChannelConditionModel", LOG_LEVEL_LOGIC);
-        
-        // Application Layer
-        LogComponentEnable ("UdpClient", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("UdpServer", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("UdpSocketImpl", LOG_LEVEL_LOGIC);
-        
-        // Transport Layer
-        LogComponentEnable ("UdpL4Protocol", LOG_LEVEL_LOGIC);
-        
-        // Network Layer (IP)
-        LogComponentEnable ("Ipv4L3Protocol", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("Ipv4StaticRouting", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("Ipv4GlobalRouting", LOG_LEVEL_LOGIC);
-        
-        // NR Protocol Stack
-        LogComponentEnable ("NrRlcUm", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("NrPdcp", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("NrGnbMac", LOG_LEVEL_LOGIC);
-        LogComponentEnable ("NrUeMac", LOG_LEVEL_LOGIC);
-        
-        // Point-to-Point
-        LogComponentEnable ("PointToPointNetDevice", LOG_LEVEL_LOGIC);
-    }
+
     /*
      * Default values for the simulation. We are progressively removing all
      * the instances of SetDefault, but we need it for legacy code (LTE)
@@ -210,7 +299,6 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::NrMacSchedulerNs3::DlCtrlSymbols", UintegerValue(1));
     Config::SetDefault("ns3::NrMacSchedulerNs3::UlCtrlSymbols", UintegerValue(1));
     
-
     /*
      * Create NR simulation helpers
      */
@@ -337,18 +425,31 @@ int main(int argc, char *argv[])
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
- 
-    // Connect trace sources for packet tracking
-    if (logging) {
-        // Trace UDP application layer
-        Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&UdpClientTxTrace));
-        Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpServer/Rx", MakeCallback(&PacketSinkRxTrace));
-        
-        // Trace Point-to-Point devices (backhaul)
-        Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacTx", 
-                       MakeCallback(&PointToPointTxTrace));
-        Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacRx", 
-                       MakeCallback(&PointToPointRxTrace));
+
+    if (logging)
+    {
+      // Connect trace sources for packet tracking
+      // Trace UDP application layer
+      Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&UdpClientTxTrace));
+      Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpServer/Rx", MakeCallback(&PacketSinkRxTrace));
+      
+      // Trace Point-to-Point devices (backhaul)
+      Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacTx", 
+                      MakeCallback(&PointToPointTxTrace));
+      Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacRx", 
+                      MakeCallback(&PointToPointRxTrace));
+      
+      // Trace NR devices
+      Config::Connect ("/NodeList/*/DeviceList/*/$ns3::NrUeNetDevice/Tx",
+                        MakeCallback (&TxDataTrace));
+      // Similarly for the gNB side or reception:
+      Config::Connect ("/NodeList/*/DeviceList/*/$ns3::NrGnbNetDevice/Tx",
+                        MakeCallback (&TxDataTrace));
+      Config::Connect ("/NodeList/*/DeviceList/*/$ns3::NrUeNetDevice/Rx",
+                        MakeCallback (&RxDataTrace));
+      // Similarly for the gNB side or reception:
+      Config::Connect ("/NodeList/*/DeviceList/*/$ns3::NrGnbNetDevice/Rx",
+                        MakeCallback (&RxDataTrace));
     }
  
     // start server and client apps
@@ -368,7 +469,7 @@ int main(int argc, char *argv[])
     Simulator::Stop (Time (duration));
     std::cout << "============= Starting simulation for " << duration << " =============" << std::endl;
     
-
+    /*
     Time printInterval = Seconds(5);
     Time simDuration = Time(duration);
     for (Time t = printInterval; t < simDuration; t += printInterval) {
@@ -376,6 +477,7 @@ int main(int argc, char *argv[])
             std::cout << "Simulation time: " << t.GetSeconds() << "s" << std::endl;
         });
     }
+    */
     
     Simulator::Run();
 
