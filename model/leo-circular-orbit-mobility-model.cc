@@ -74,12 +74,7 @@ LeoCircularOrbitMobilityModel::GetTypeId ()
                    DoubleValue (0.0),
                    MakeDoubleAccessor (&LeoCircularOrbitMobilityModel::SetOffset,
                    		       &LeoCircularOrbitMobilityModel::GetOffset),
-                   MakeDoubleChecker<double> (0, 360.0))
-    .AddAttribute ("SkipSetPosition",
-                   "If true, the SetPosition method will not be called when longitude or offset is set",
-                   BooleanValue (true),
-                   MakeBooleanAccessor (&LeoCircularOrbitMobilityModel::m_disableSetPosition),
-                   MakeBooleanChecker ());
+                   MakeDoubleChecker<double> (0, 360.0));
     TypeId::AttributeInformation notToUse;
     tid.LookupAttributeByName ("PositionLatLongAlt", &notToUse, true);
     notToUse.supportLevel = TypeId::SupportLevel::OBSOLETE;
@@ -242,9 +237,6 @@ LeoCircularOrbitMobilityModel::DoSetPosition (const Vector &position)
   // this works nicely with MobilityHelper and GetPostion will still get the
   // correct position, but be aware that it will not be the same as supplied to
   // SetPostion (see LeoCircularOrbitPostionAllocator to understand how it works)
-  
-  if (m_disableSetPosition) return; // Not skipped when using Leo Position Allocators
-
   m_longitude = position.x;
   m_offset = position.y;
   Update ();

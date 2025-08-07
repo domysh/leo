@@ -120,11 +120,6 @@ private:
   double m_offset;
 
   /**
-   * Disable SetPosition Flag (useful when offset or longitude is set)
-   */
-  bool m_disableSetPosition = false;
-
-  /**
    * Retrograde orbit flag
    */
   bool m_retrogradeOrbit = false;

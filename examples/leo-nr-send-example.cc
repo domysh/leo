@@ -205,6 +205,8 @@ int main(int argc, char *argv[])
     int numCars = 1; // number of cars in the simulation
     std::string duration = "420ms";
     std::string traceFile = "";
+    std::string antennaModel = "IsotropicAntennaModel"; // Antenna model
+    std::string satMode = "single"; // Satellite mode, either single or multiple
     Time mobilityPrecision = MilliSeconds(1000); // Precision for mobility updates
     bool enableGnb = true; // Whether to enable gNB transmission
     auto rnd_seed = time(nullptr);
@@ -220,6 +222,11 @@ int main(int argc, char *argv[])
     cmd.AddValue("carLatitude", "Initial latitude of the car (only with 1 car)", carLatitude);
     cmd.AddValue("carLongitude", "Initial longitude of the car (only with 1 car)", carLongitude);
     cmd.AddValue("numCars", "Number of cars in the simulation", numCars);
+    cmd.AddValue("antennaModel", "The antenna model to use for the simulation. "
+                 "Valid options are: IsotropicAntennaModel, CircularApertureAntennaModel, ParabolicAntennaModel, "
+                 "ThreeGppAntennaModel, and CosineAntennaModel",
+                 antennaModel);
+    cmd.AddValue("satMode", "The satellite mode to use for the simulation. 'single', 'multiple', 'single-dislocated", satMode);
     cmd.AddValue("satAntennaGainDb", "The satellite antenna gain in dB", satAntennaGainDb);
     cmd.AddValue("ueAntennaGainDb", "The UE antenna gain in dB", ueAntennaGainDb);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
@@ -242,11 +249,19 @@ int main(int argc, char *argv[])
                         TimeValue(MilliSeconds(0))); // do not update the channel condition
 
   LeoOrbitNodeHelper orbit;
-  MobilityHelper mobility;
   
   orbit.SetPrecision(mobilityPrecision); // Set precision for position updates
   // Create and configure satellites using LEO orbit helper
-  NodeContainer satellites = orbit.Install (300.0, 20, 90., 180.0, false);
+  NodeContainer satellites;
+  if (satMode == "multiple") {
+    satellites = orbit.Install(LeoOrbit(300, 20, 10, 10));
+  } else if (satMode == "single-dislocated") {
+    satellites = orbit.Install (300, 20, 90, 180);
+  }else if (satMode == "single") {
+    satellites = orbit.Install (300, 20, 0, 0);
+  } else {
+    NS_FATAL_ERROR("Invalid satellite mode: " << satMode);
+  }
   // Create ground nodes (cars)
   NodeContainer cars;
   if (numCars > 1) {
@@ -256,26 +271,27 @@ int main(int argc, char *argv[])
         auto rndLat = (rand()%180000)/1000.0 - 90.0; // Random latitude
         auto rndLon = (rand()%360000)/1000.0 - 180.0; // Random longitude
         auto rndAzimuth = (rand()%360000)/1000.0; // Random azimuth
+
         // Install GndConstantVelocityMobilityModel on cars
-        mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
-                                    "InitialLatitude", DoubleValue (rndLat),
-                                    "InitialLongitude", DoubleValue (rndLon),
-                                    "Altitude", DoubleValue (2),
-                                    "Speed", DoubleValue (carSpeed),
-                                    "Azimuth", DoubleValue (rndAzimuth),
-                                    "Precision", TimeValue (mobilityPrecision)); // Update every second
-        mobility.Install(car);
+        Ptr<GndConstantVelocityMobilityModel> mobilityModel = CreateObject<GndConstantVelocityMobilityModel>();
+        mobilityModel->SetAttribute("InitialLatitude", DoubleValue(rndLat));
+        mobilityModel->SetAttribute("InitialLongitude", DoubleValue(rndLon));
+        mobilityModel->SetAttribute("Altitude", DoubleValue(2));
+        mobilityModel->SetAttribute("Speed", DoubleValue(carSpeed));
+        mobilityModel->SetAttribute("Azimuth", DoubleValue(rndAzimuth));
+        mobilityModel->SetAttribute("Precision", TimeValue(mobilityPrecision));
+        car->AggregateObject(mobilityModel);
     }
   } else {
     cars.Create(1); // Create a single car
-    mobility.SetMobilityModel ("ns3::GndConstantVelocityMobilityModel",
-                                "InitialLatitude", DoubleValue (carLatitude),
-                                "InitialLongitude", DoubleValue (carLongitude),
-                                "Altitude", DoubleValue (3),
-                                "Speed", DoubleValue (carSpeed),
-                                "Azimuth", DoubleValue (0),
-                                "Precision", TimeValue (mobilityPrecision));
-    mobility.Install(cars.Get(0));
+    Ptr<GndConstantVelocityMobilityModel> mobilityModel = CreateObject<GndConstantVelocityMobilityModel>();
+    mobilityModel->SetAttribute("InitialLatitude", DoubleValue(carLatitude));
+    mobilityModel->SetAttribute("InitialLongitude", DoubleValue(carLongitude));
+    mobilityModel->SetAttribute("Altitude", DoubleValue(3));
+    mobilityModel->SetAttribute("Speed", DoubleValue(carSpeed));
+    mobilityModel->SetAttribute("Azimuth", DoubleValue(0));
+    mobilityModel->SetAttribute("Precision", TimeValue(mobilityPrecision));
+    cars.Get(0)->AggregateObject(mobilityModel);
   }
 
   if (traceFile != "")
@@ -340,22 +356,95 @@ int main(int argc, char *argv[])
  
     // Configure scheduler
     nrHelper->SetSchedulerTypeId(NrMacSchedulerTdmaRR::GetTypeId());
+
+    if (antennaModel == "IsotropicAntennaModel")
+    {
+        // Antennas for the UEs
+        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        nrHelper->SetUeAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
+                                            "Gain", DoubleValue(ueAntennaGainDb)
+                                        )));
+    
+        // Antennas for the gNbs
+        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
+                                            "Gain", DoubleValue(satAntennaGainDb)
+                                        )));
+    }
+    else if (antennaModel == "CircularApertureAntennaModel")
+    {
+        // Antennas for the UEs
+        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        nrHelper->SetUeAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<CircularApertureAntennaModel>(
+                                            "AntennaMaxGainDb", DoubleValue(ueAntennaGainDb)
+                                        )));
+    
+        // Antennas for the gNbs
+        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<CircularApertureAntennaModel>(
+                                            "AntennaMaxGainDb", DoubleValue(satAntennaGainDb)
+                                        )));
+    }
+    else if (antennaModel == "ParabolicAntennaModel")
+    {
+        // Antennas for the UEs
+        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        nrHelper->SetUeAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>()));
+    
+        // Antennas for the gNbs
+        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>()));
+    }
+    else if (antennaModel == "ThreeGppAntennaModel")
+    {
+        // Antennas for the UEs
+        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        nrHelper->SetUeAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<ThreeGppAntennaModel>()));
+    
+        // Antennas for the gNbs
+        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<ThreeGppAntennaModel>()));
+    }
+    else if (antennaModel == "CosineAntennaModel")
+    {
+        // Antennas for the UEs
+        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        nrHelper->SetUeAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<CosineAntennaModel>(
+                                            "MaxGain", DoubleValue(ueAntennaGainDb)
+                                        )));
+    
+        // Antennas for the gNbs
+        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+        nrHelper->SetGnbAntennaAttribute("AntennaElement",
+                                        PointerValue(CreateObjectWithAttributes<CosineAntennaModel>(
+                                            "MaxGain", DoubleValue(satAntennaGainDb)
+                                        )));
+    }
+    else
+    {
+        NS_FATAL_ERROR("Invalid antenna model specified: " << antennaModel);
+    }
  
-    // Antennas for the UEs
-    nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-    nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
-    nrHelper->SetUeAntennaAttribute("AntennaElement",
-                                    PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
-                                        "Gain", DoubleValue(ueAntennaGainDb)
-                                    )));
- 
-    // Antennas for the gNbs
-    nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-    nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
-    nrHelper->SetGnbAntennaAttribute("AntennaElement",
-                                     PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
-                                        "Gain", DoubleValue(satAntennaGainDb)
-                                     )));
+
  
     // install nr net devices
     NetDeviceContainer gnbNetDev = nrHelper->InstallGnbDevice(satellites, allBwps);
@@ -365,13 +454,16 @@ int main(int argc, char *argv[])
     randomStream += nrHelper->AssignStreams(gnbNetDev, randomStream);
     randomStream += nrHelper->AssignStreams(ueNetDev, randomStream);
  
-    // Set gNB transmission power based on enableGnb parameter
-    if (enableGnb) {
-        nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(txPower);
-        std::cout << "gNB enabled with transmission power: " << txPower << " dBm" << std::endl;
-    } else {
-        nrHelper->GetGnbPhy(gnbNetDev.Get(0), 0)->SetTxPower(-1000); // Effectively disable transmission
-        std::cout << "gNB disabled (transmission power set to -1000 dBm)" << std::endl;
+    for (uint32_t i = 0; i < gnbNetDev.GetN(); ++i)
+    {
+        // Set gNB transmission power based on enableGnb parameter
+        if (enableGnb) {
+            nrHelper->GetGnbPhy(gnbNetDev.Get(i), 0)->SetTxPower(txPower);
+            std::cout << "gNB enabled with transmission power: " << txPower << " dBm" << std::endl;
+        } else {
+            nrHelper->GetGnbPhy(gnbNetDev.Get(i), 0)->SetTxPower(-1000); // Effectively disable transmission
+            std::cout << "gNB disabled (transmission power set to -1000 dBm)" << std::endl;
+        }
     }
 
  
@@ -481,22 +573,18 @@ int main(int argc, char *argv[])
     
     Simulator::Run();
 
- 
-    Ptr<UdpServer> serverApp = serverApps.Get(0)->GetObject<UdpServer>();
-    uint64_t receivedPackets = serverApp->GetReceived();
- 
+    for (uint32_t u = 0; u < serverApps.GetN(); ++u)
+    {
+        Ptr<UdpServer> serverApp = serverApps.Get(u)->GetObject<UdpServer>();
+        auto receivedPackets = serverApp->GetReceived();
+        std::cout << "Car Node " << serverApp->GetNode()->GetId() 
+                  << " received packets: " << receivedPackets << (receivedPackets == 10 ? " \t✅" : " \t❌") << std::endl;
+
+    }
+
     Simulator::Destroy();
 
     if (traceFileOutputStream.is_open()){
       traceFileOutputStream.close();
-    }
-
-    if (receivedPackets == 10)
-    {
-        std::cout << "Test passed! [Received packets: " << receivedPackets << " == 10]" << std::endl;
-    }
-    else
-    {
-        std::cout << "Test failed! [Received packets: " << receivedPackets << " != 10]" << std::endl;
     }
 }

@@ -81,7 +81,7 @@ Il mobility model è stato sviluppato partendo dall'esempio di tracciamento orbi
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.8\textwidth]{assets/move-model.jpg}
-    \caption{Move Model Graph Examples}\label{fig:car_move_model}
+    \caption{Esempi di grafici del modello di movimento}\label{fig:car_move_model}
 \end{figure}
 
 \begin{itemize}
@@ -334,6 +334,141 @@ Come è possibile vedere nella Figura~\ref{fig:sat_custom_positioning_more_plane
 
 Mentre modificando il parametro del numero di satelliti per piano, come in Figura~\ref{fig:sat_custom_positioning_more_sats}, il sistema posiziona 5 satelliti equidistanti su un singolo piano orbitale, con inclinazione di 20 gradi e altitudine di 300 km, con offset incrementale di 72° di offset tra i satelliti sulla stessa circonferenza orbitale.
 
+\subsection{Simulazioni con UDP: molteplici automobili e 1 satellite: caso non conforme}
+
+Duranti alcuni test nelle simulazioni con UDP, sono state posizionate 10 automobili con direzioni causali e posizioni iniziali casuali, ed un solo satellite (come mostrato in Figura~\ref{fig:multi_car_one_sat_example}, dove il nodo evidenziato è l'unico satellite), dove tuttavia risulta che tutti e 10 gli udp server abbiano ricevuto correttamente i 10 pacchetti inviati tramite il satellite a ciascuno di loro, nonostante ci siano distante elevate dal satellite stesso. Nel seguente esempio si sono registrate nei log di 5g-lena lateze tra i 3 e i 6 ms, con SINR dai 41 ai 49 per i 100 pacchetti scambiati.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{assets/testdata/multi_car_one_sat_example/screenshot.png}
+    \caption{Esempio di 10 automobili e un satellite in comunicazione con UDP}\label{fig:multi_car_one_sat_example}
+\end{figure}
+
+\subsection{Simulazioni con UDP: molteplici automobili e molteplici satelliti}
+
+In un ulteriore esempio sono state usate 10 orbite a 300km di altitudine a 20° di inclinazione distribuite uniformemente su tutte le longitudini con 10 satelliti a offset equidistanti nella stessa orbite, per ciascuna orbita, per un totale di 100 satelliti (\textit{LeoOrbitNodeHelper::Install (LeoOrbit(300.0, 20, 10, 10));}) e come nell'esempio precedente 10 auto distribuite causalmente sulla superficie terrestre, con direzioni casuali. Anche in questo caso, tutti i pacchetti sono stati ricevuti correttamente da ciascuna automobile, ma ci sono stati dei pacchetti corrotti, delle ritrasmissioni, i valori di SINR sono risultati molto variabili come mostrato nella Tabella~\ref{tab:sinr_values_multi_car_one_sat_example} e i valori di pathloss meno suscettibili a variazioni, come mostrato nella Tabella~\ref{tab:pathloss_values_multi_car_one_sat_example}. Le latenze emerse dai log sono state mediamente 3-4ms con picchi sporadici a 9ms, probabilmente dovuti a ritrasmissioni o errori di comunicazione.
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+    \hline
+        Time & CellId & RNTI & BWPId & SINR(dB) \\ \hline
+        0.203286 & 11 & 1 & 0 & -0.0221018 \\ \hline
+        0.203286 & 21 & 1 & 0 & 39.3213 \\ \hline
+        0.203286 & 41 & 2 & 0 & -7.21148 \\ \hline
+        0.203286 & 61 & 2 & 0 & -9.69702 \\ \hline
+        0.203286 & 67 & 1 & 0 & 64.0005 \\ \hline
+        0.203286 & 85 & 1 & 0 & 40.3446 \\ \hline
+        0.203286 & 111 & 1 & 0 & 37.1436 \\ \hline
+        0.203286 & 151 & 1 & 0 & 33.6474 \\ \hline
+        0.2035 & 41 & 1 & 0 & 53.9643 \\ \hline
+        0.2035 & 61 & 1 & 0 & 59.7016 \\ \hline
+        0.208929 & 61 & 2 & 0 & 14.7294 \\ \hline
+        0.213143 & 11 & 1 & 0 & -7.67671 \\ \hline
+        0.213143 & 21 & 1 & 0 & 43.0344 \\ \hline
+        0.213143 & 67 & 1 & 0 & 62.637 \\ \hline
+        0.213143 & 85 & 1 & 0 & 39.392 \\ \hline
+        0.213143 & 111 & 1 & 0 & 34.523 \\ \hline
+        0.213143 & 151 & 1 & 0 & 32.4326 \\ \hline
+        0.213286 & 41 & 2 & 0 & -6.22506 \\ \hline
+        0.213286 & 61 & 2 & 0 & -10.9642 \\ \hline
+        0.213357 & 41 & 1 & 0 & 54.0424 \\ \hline
+        0.213357 & 61 & 1 & 0 & 61.41 \\ \hline
+        0.218929 & 11 & 1 & 0 & 17.607 \\ \hline
+        0.223143 & 21 & 1 & 0 & 43.0113 \\ \hline
+        0.223143 & 67 & 1 & 0 & 63.5249 \\ \hline
+        0.223143 & 85 & 1 & 0 & 39.3425 \\ \hline
+        0.223143 & 111 & 1 & 0 & 34.5217 \\ \hline
+        0.223143 & 151 & 1 & 0 & 32.479 \\ \hline
+        0.223286 & 11 & 1 & 0 & -3.09574 \\ \hline
+        0.223286 & 41 & 2 & 0 & -5.41163 \\ \hline
+        0.223286 & 61 & 2 & 0 & -14.5532 \\ \hline
+    \end{tabular}
+    \caption{Valori di SINR per 10 automobili e 100 satelliti (txPower gNB a 40 dB)}\label{tab:sinr_values_multi_car_one_sat_example}
+\end{table}
+
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+    \hline
+        Time(sec) & CellId & BwpId & IMSI & pathLoss(dB) \\ \hline
+        0.0179286 & 151 & 0 & 100 & -196.012 \\ \hline
+        0.0179286 & 61 & 0 & 101 & -188.79 \\ \hline
+        0.0179286 & 41 & 0 & 102 & -190.057 \\ \hline
+        0.0179286 & 11 & 0 & 103 & -223.155 \\ \hline
+        0.0179286 & 111 & 0 & 104 & -196.99 \\ \hline
+        0.0179286 & 85 & 0 & 105 & -193.023 \\ \hline
+        0.0179286 & 61 & 0 & 106 & -236.975 \\ \hline
+        0.0179286 & 41 & 0 & 107 & -202.457 \\ \hline
+        0.0179286 & 21 & 0 & 108 & -191.77 \\ \hline
+        0.0179286 & 67 & 0 & 109 & -178.838 \\ \hline
+        0.0288571 & 11 & 0 & 103 & -223.155 \\ \hline
+        0.0348571 & 61 & 0 & 101 & -188.79 \\ \hline
+        0.0428571 & 61 & 0 & 106 & -236.975 \\ \hline
+        0.0428571 & 85 & 0 & 105 & -193.023 \\ \hline
+        0.0638571 & 111 & 0 & 104 & -195.884 \\ \hline
+    \end{tabular}
+    \caption{Valori di Pathloss per 10 automobili e 100 satelliti (txPower gNB a 40 dB)}\label{tab:pathloss_values_multi_car_one_sat_example}
+\end{table}
+
+Si riportano inoltre le figure di tutti i nodi (Figura~\ref{fig:multi_car_one_sat_example_nodes}), solo quello delle auto (Figura~\ref{fig:multi_car_one_sat_example_cars}) e quello dei satelliti utilizzati e le auto(Figura~\ref{fig:multi_car_one_sat_example_satellites_and_cars}). Guardando le figure si delinea come le antenne attivate per la comunicazione siano coerenti con il posizionamento dei vari nodi.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{assets/testdata/multi_sat_multi_car_example/nodi.png}
+    \caption{Tutti i nodi della simulazione}\label{fig:multi_car_one_sat_example_nodes}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{assets/testdata/multi_sat_multi_car_example/auto_usate.png}
+    \caption{Le automobili posizionate nella simulazione causualmente}\label{fig:multi_car_one_sat_example_cars}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{assets/testdata/multi_sat_multi_car_example/satelliti_usati_e_auto.png}
+    \caption{I satelliti utilizzati e le automobili posizionate nella simulazione}\label{fig:multi_car_one_sat_example_satellites_and_cars}
+\end{figure}
+
+\subsection{Test con diverse tipologie di antenne}
+
+Nei seguenti test vedremo come si comportano antenne diverse da quella usata fin'ora (antenna isotropica).
+Per eseguire i test sono state implementate 3 modalità di posizionamento del satellite: 'multiple', 'single', 'single-displocated', che definisco nel primo caso una flotta di satellita come in Figura~\label{fig:multi_car_one_sat_example_nodes}, nel secondo un singolo satellite di fronte all'automobile posizionata con i parametri di default (anche questa impostazione è di default), mentre l'ultimo caso posiziona il satellite in una posizione dislocata rispetto all'automobile, in modo da avere un satellite a 300km di altitudine, inclinato di 20° e con longitudine di 90° e offset di 180°, come mostrato in Figura~\ref{fig:sat_custom_positioning}.
+
+inoltre sono stati implementati diverse modalità di installazione di antenne: IsotropicAntennaModel, CircularApertureAntennaModel, ParabolicAntennaModel, ThreeGppAntennaModel, e CosineAntennaModel. Di seguito si mostrerà come si comportano le antenne in queste diverse configurazioni.
+
+\subsubsection{CircularApertureAntennaModel}
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CircularApertureAntennaModel --txPower=120 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, ma già a 100dB non ci è possibile inviare i pacchetti
+
+Però durante i test si delinea un comportamento anomalo:
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CircularApertureAntennaModel --txPower=110 --logging}: qui non riusciamo a trasmettere i pacchetti.
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single-dislocated --antennaModel=CircularApertureAntennaModel --txPower=110 --logging}: qui invece 8/10 pacchetti vengono ricevuti correttamente, ma con un SINR molto basso
+
+Nell'esempio in cui i pacchetti arrivano in posizionamento diretto abbiamo SINR che oscilla tra -19 e -21, mentre latenze che oscillano tra i 19 e 20ms.
+
+\subsubsection{ParabolicAntennaModel}
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ParabolicAntennaModel --txPower=70 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con SINR tra i -18 e i -20, e latenze sempre tra i 19 e i 20ms.
+
+Con le stesse opzioni ma in modalità displocata non abbiamo la trasmissione dei pacchetti, con un SINR sui -47dB.
+
+\subsubsection{ThreeGppAntennaModel}
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ThreeGppAntennaModel --txPower=70 --loggingg}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con -19dB di SINR e latenze tra i 19 e i 20ms.
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single-dislocated --antennaModel=ThreeGppAntennaModel --txPower=95 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con SINR a -18db e latenze sui 18ms.
+
+A 95dB in direzione diretta abbiamo -15 di SINR e 3 ms di latenza, con 10 pacchetti ricevuti correttamente.
+
+\subsubsection{CosineAntennaModel}
+
+\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CosineAntennaModel --txPower=0.1 --logging}
+
+Con questa configurazione, con txPower a 0.1, riusciamo a comunicare correttamente con SINR a 5dB e latenze sui 3ms, mentre con la stessa con 13/14 dB di SINR e latenze sui 3ms. Mentre con posizioni displocate i pacchetti non vengono tutti ricevuti correttamente, il SINR passa a -20/-22dB.
 
 \section{BUG REPORT}
 
@@ -362,38 +497,22 @@ Command 'build/contrib/leo/examples/ns3.45-leo-nr-send-example-default --carSpee
     framerule=0.8pt,
     basicstyle=\footnotesize\ttfamily,
     breaklines=true,
-    caption={Se la posizione è la medesima, accade che eseguiamo 0/0 e abbiamo NaN come risultato},
-    label={lst:ns3-position-error}
+    caption={Correzione del bug: Aggiunta di un controllo per nodi in posizione identica per evitare NaN generati da divisione per 0},
+    label={lst:ns3-elevation-angle-fix}
 ]
-double
-GeocentricConstantPositionMobilityModel::DoGetElevationAngle(
-    Ptr<const GeocentricConstantPositionMobilityModel> other)
-{
-    Vector me = this->DoGetGeocentricPosition();
-    Vector them = other->DoGetGeocentricPosition();
+diff --git a/src/mobility/model/geocentric-constant-position-mobility-model.cc b/src/mobility/model/geocentric-constant-position-mobility-model.cc
+index 282feeeda..eef215446 100644
+--- a/src/mobility/model/geocentric-constant-position-mobility-model.cc
++++ b/src/mobility/model/geocentric-constant-position-mobility-model.cc
+@@ -202,6 +202,7 @@ GeocentricConstantPositionMobilityModel::DoGetElevationAngle(
+     Vector bMinusA = b - a;
+     double numerator = std::abs(a * bMinusA);
+     double denominator = a.GetLength() * bMinusA.GetLength();
++    if (denominator == 0) return 0.0; // Distance is zero, no elevation angle
+     double x = numerator / denominator;
 
-    // a is assumed to be the terminal with the lowest altitude
-    Vector& a = (me.z < them.z ? me : them);
-    Vector& b = (me.z < them.z ? them : me);
-
-    Vector bMinusA = b - a;
-    double numerator = std::abs(a * bMinusA);
-    double denominator = a.GetLength() * bMinusA.GetLength();
-    double x = numerator / denominator;
-
-    // Enforce the appropriate domain range ([-1, 1]) for the argument of std::asin.
-    x = std::min(x, 1.0);
-    x = std::max(x, -1.0);
-
-    // asin returns radians, we convert to degrees
-    double elevAngle = std::abs((180.0 * M_1_PI) * asin(x));
-
-    return elevAngle;
-}
+     // Enforce the appropriate domain range ([-1, 1]) for the argument of std::asin.
 \end{lstlisting}
-
-
-
 
 \cleardoublepage
 \bibliographystyle{unsrt}

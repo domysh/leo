@@ -62,8 +62,7 @@ LeoOrbitNodeHelper::Install (const LeoOrbit &orbit)
   mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
              "Precision", TimeValue (m_precision),
   			     "Altitude", DoubleValue (orbit.alt),
-  			     "Inclination", DoubleValue (orbit.inc),
-             "SkipSetPosition", BooleanValue (false));
+  			     "Inclination", DoubleValue (orbit.inc));
 
   NodeContainer c;
   c.Create (orbit.sats*orbit.planes);
@@ -77,19 +76,18 @@ LeoOrbitNodeHelper::Install (const double &altitude, const double &inclination,
       const double &longitude, const double &offset, const bool &retrograde){
   NS_LOG_FUNCTION (this << altitude << inclination << longitude << offset);
 
-  MobilityHelper mobility;
-  mobility.SetMobilityModel ("ns3::LeoCircularOrbitMobilityModel",
-    "Precision", TimeValue (m_precision),
-    "Altitude", DoubleValue (altitude),
-    "Inclination", DoubleValue (inclination),
-    "Longitude", DoubleValue (longitude),
-    "Offset", DoubleValue (offset),
-    "RetrogradeOrbit", BooleanValue (retrograde)
-  );
+
+  Ptr<LeoCircularOrbitMobilityModel> mobilityModel = CreateObject<LeoCircularOrbitMobilityModel>();
+  mobilityModel->SetAttribute("Precision", TimeValue (m_precision));
+  mobilityModel->SetAttribute("Altitude", DoubleValue(altitude));
+  mobilityModel->SetAttribute("Inclination", DoubleValue (inclination));
+  mobilityModel->SetAttribute("Longitude", DoubleValue (longitude));
+  mobilityModel->SetAttribute("Offset", DoubleValue (offset));
+  mobilityModel->SetAttribute("RetrogradeOrbit", BooleanValue (retrograde));
 
   NodeContainer c;
   c.Create (1);
-  mobility.Install (c);
+  c.Get(0)->AggregateObject(mobilityModel);
   return c;
 }
 
