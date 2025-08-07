@@ -435,40 +435,83 @@ Si riportano inoltre le figure di tutti i nodi (Figura~\ref{fig:multi_car_one_sa
 \subsection{Test con diverse tipologie di antenne}
 
 Nei seguenti test vedremo come si comportano antenne diverse da quella usata fin'ora (antenna isotropica).
-Per eseguire i test sono state implementate 3 modalità di posizionamento del satellite: 'multiple', 'single', 'single-displocated', che definisco nel primo caso una flotta di satellita come in Figura~\label{fig:multi_car_one_sat_example_nodes}, nel secondo un singolo satellite di fronte all'automobile posizionata con i parametri di default (anche questa impostazione è di default), mentre l'ultimo caso posiziona il satellite in una posizione dislocata rispetto all'automobile, in modo da avere un satellite a 300km di altitudine, inclinato di 20° e con longitudine di 90° e offset di 180°, come mostrato in Figura~\ref{fig:sat_custom_positioning}.
 
-inoltre sono stati implementati diverse modalità di installazione di antenne: IsotropicAntennaModel, CircularApertureAntennaModel, ParabolicAntennaModel, ThreeGppAntennaModel, e CosineAntennaModel. Di seguito si mostrerà come si comportano le antenne in queste diverse configurazioni.
+\textbf{Modalità di posizionamento del satellite:}
+\begin{itemize}
+    \item \textbf{multiple}: flotta di satelliti come in Figura~\ref{fig:multi_car_one_sat_example_nodes}
+    \item \textbf{single}: singolo satellite di fronte all'automobile (configurazione di default)
+    \item \textbf{single-dislocated}: satellite posizionato a 300km di altitudine, inclinato di 20° con longitudine di 90° e offset di 180°, come mostrato in Figura~\ref{fig:sat_custom_positioning}
+\end{itemize}
+
+\textbf{Modelli di antenna implementati:}
+\begin{itemize}
+    \item IsotropicAntennaModel
+    \item CircularApertureAntennaModel
+    \item ParabolicAntennaModel
+    \item ThreeGppAntennaModel
+    \item CosineAntennaModel
+\end{itemize}
+
+Di seguito si mostrerà come si comportano le antenne in queste diverse configurazioni.
 
 \subsubsection{CircularApertureAntennaModel}
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CircularApertureAntennaModel --txPower=120 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, ma già a 100dB non ci è possibile inviare i pacchetti
+\textbf{Test con posizionamento diretto:}
+\begin{itemize}
+    \item Parametri: \texttt{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CircularApertureAntennaModel --txPower=120 --logging}
+    \item Risultato: trasmissione senza perdite
+    \item Note: con txPower=100dB non è possibile inviare i pacchetti
+\end{itemize}
 
-Però durante i test si delinea un comportamento anomalo:
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CircularApertureAntennaModel --txPower=110 --logging}: qui non riusciamo a trasmettere i pacchetti.
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single-dislocated --antennaModel=CircularApertureAntennaModel --txPower=110 --logging}: qui invece 8/10 pacchetti vengono ricevuti correttamente, ma con un SINR molto basso
-
-Nell'esempio in cui i pacchetti arrivano in posizionamento diretto abbiamo SINR che oscilla tra -19 e -21, mentre latenze che oscillano tra i 19 e 20ms.
+\textbf{Comportamento anomalo osservato:}
+\begin{itemize}
+    \item Con txPower=110 e posizionamento diretto: nessuna trasmissione
+    \item Con txPower=110 e posizionamento dislocato: 8/10 pacchetti ricevuti con SINR molto basso
+    \item SINR: oscillazione tra -19 e -21dB
+    \item Latenza: 19-20ms
+\end{itemize}
 
 \subsubsection{ParabolicAntennaModel}
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ParabolicAntennaModel --txPower=70 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con SINR tra i -18 e i -20, e latenze sempre tra i 19 e i 20ms.
-
-Con le stesse opzioni ma in modalità displocata non abbiamo la trasmissione dei pacchetti, con un SINR sui -47dB.
+\textbf{Test principale:}
+\begin{itemize}
+    \item Parametri: \texttt{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ParabolicAntennaModel --txPower=70 --logging}
+    \item Risultato: trasmissione senza perdite
+    \item SINR: -18 a -20dB
+    \item Latenza: 19-20ms
+    \item Note: in modalità dislocata nessuna trasmissione (SINR -47dB)
+\end{itemize}
 
 \subsubsection{ThreeGppAntennaModel}
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ThreeGppAntennaModel --txPower=70 --loggingg}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con -19dB di SINR e latenze tra i 19 e i 20ms.
+\textbf{Test con posizionamento diretto:}
+\begin{itemize}
+    \item Parametri: \texttt{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=ThreeGppAntennaModel --txPower=70 --logging}
+    \item Risultato: trasmissione senza perdite
+    \item SINR: -19dB
+    \item Latenza: 19-20ms
+\end{itemize}
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single-dislocated --antennaModel=ThreeGppAntennaModel --txPower=95 --logging}: con questi parametri riusciamo a trasmettere i pacchetti senza perdite, con SINR a -18db e latenze sui 18ms.
-
-A 95dB in direzione diretta abbiamo -15 di SINR e 3 ms di latenza, con 10 pacchetti ricevuti correttamente.
+\textbf{Test con posizionamento dislocato:}
+\begin{itemize}
+    \item Parametri: \texttt{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single-dislocated --antennaModel=ThreeGppAntennaModel --txPower=95 --logging}
+    \item Risultato: trasmissione senza perdite
+    \item SINR: -18dB
+    \item Latenza: 18ms
+    \item Con txPower=95dB in direzione diretta: SINR -15dB, latenza 3ms, 10 pacchetti ricevuti
+\end{itemize}
 
 \subsubsection{CosineAntennaModel}
 
-\textit{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CosineAntennaModel --txPower=0.1 --logging}
-
-Con questa configurazione, con txPower a 0.1, riusciamo a comunicare correttamente con SINR a 5dB e latenze sui 3ms, mentre con la stessa con 13/14 dB di SINR e latenze sui 3ms. Mentre con posizioni displocate i pacchetti non vengono tutti ricevuti correttamente, il SINR passa a -20/-22dB.
+\textbf{Risultati test:}
+\begin{itemize}
+    \item Parametri: \texttt{--duration=2s --mobilityPrecision=1s --traceFile=track.csv --satMode=single --antennaModel=CosineAntennaModel --txPower=0.1 --logging}
+    \item Risultato: comunicazione avvenuta con txPower molto basso (0.1)
+    \item SINR: 5dB (ottimale)
+    \item Latenza: 3ms (eccellente)
+    \item Note: in posizioni dislocate i pacchetti non vengono tutti ricevuti, SINR passa a -20/-22dB
+\end{itemize}
 
 \section{BUG REPORT}
 
