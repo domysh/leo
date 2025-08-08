@@ -22,11 +22,13 @@
 #include "ns3/nr-module.h"
 #include "ns3/nr-point-to-point-epc-helper.h"
 #include "ns3/point-to-point-helper.h"
+#include "ns3/nr-pdcp-header.h" // Include the PDCP header definition
+#include "ns3/packet.h"
 
 using namespace ns3;
 
 static std::ofstream traceFileOutputStream;
-static bool logging = false; // whether to enable logging from the simulation, another option is by
+static bool logging = true; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
 
 // Map to store transmission times for delay calculation
@@ -109,9 +111,7 @@ void UdpClientTxTrace(std::string context, Ptr<const Packet> packet)
               << "Context=" << context << std::endl;
 }
 
-#include "ns3/nr-pdcp-header.h" // Include the PDCP header definition
-#include "ns3/packet.h"
-#include <iostream>
+
 
 void
 TxDataTrace (std::string context, Ptr<const Packet> p, const ns3::Address& addr)
@@ -186,6 +186,66 @@ void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
               << "Context=" << context << std::endl;
 }
 
+// TCP trace functions
+void TcpSinkRxTrace(std::string context, Ptr<const Packet> packet, const Address &from)
+{
+    uint32_t packetId = packet->GetUid();
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            std::string nodeId = context.substr(nodePos + 10, endPos - nodePos - 10);
+            nodeInfo = " [Node" + nodeId + "]";
+        }
+    }
+    
+    // Calculate delay if we have the transmission time
+    std::string delayStr = "N/A";
+    if (packetTxTimeMap.find(packetId) != packetTxTimeMap.end()) {
+        Time delay = currentTime - packetTxTimeMap[packetId];
+        delayStr = std::to_string(delay.GetMilliSeconds()) + "ms";
+        // Remove from map to save memory
+        packetTxTimeMap.erase(packetId);
+    }
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] TCP RX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "Delay=" << delayStr << ", "
+              << "From=" << from << ", "
+              << "Context=" << context << std::endl;
+}
+
+void BulkSendTxTrace(std::string context, Ptr<const Packet> packet)
+{
+    uint32_t packetId = packet->GetUid();
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    
+    // Extract node ID for better identification
+    std::string nodeInfo = "";
+    size_t nodePos = context.find("/NodeList/");
+    if (nodePos != std::string::npos) {
+        size_t endPos = context.find("/", nodePos + 10);
+        if (endPos != std::string::npos) {
+            std::string nodeId = context.substr(nodePos + 10, endPos - nodePos - 10);
+            nodeInfo = " [Node" + nodeId + "]";
+        }
+    }
+    
+    // Store transmission time for delay calculation
+    packetTxTimeMap[packetId] = currentTime;
+    
+    std::cout << "[" << currentTime.GetSeconds() << "s] TCP TX" << nodeInfo << ": " 
+              << "Size=" << packetSize << " bytes, "
+              << "PacketId=" << packetId << ", "
+              << "Context=" << context << std::endl;
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -209,6 +269,11 @@ int main(int argc, char *argv[])
     std::string satMode = "single"; // Satellite mode, either single or multiple
     Time mobilityPrecision = MilliSeconds(1000); // Precision for mobility updates
     bool enableGnb = true; // Whether to enable gNB transmission
+    std::string appType = "UDP"; // Application type: UDP or TCP
+    bool bidirectional = false; // Whether to enable bidirectional traffic
+    uint32_t packetSize = 1024; // Packet size in bytes
+    uint32_t maxPackets = 10; // Maximum number of packets
+    Time packetInterval = MilliSeconds(10); // Interval between packets
     auto rnd_seed = time(nullptr);
  
     CommandLine cmd(__FILE__);
@@ -239,6 +304,11 @@ int main(int argc, char *argv[])
                 "Precision for mobility updates (e.g., 50ms, 100ms, etc.)",
                 mobilityPrecision);
     cmd.AddValue("enableGnb", "Enable gNB transmission (1) or disable (0)", enableGnb);
+    cmd.AddValue("appType", "Application type: UDP or TCP", appType);
+    cmd.AddValue("bidirectional", "Enable bidirectional traffic (1) or disable (0)", bidirectional);
+    cmd.AddValue("packetSize", "Packet size in bytes", packetSize);
+    cmd.AddValue("maxPackets", "Maximum number of packets to send", maxPackets);
+    cmd.AddValue("packetInterval", "Interval between packets (e.g., 10ms, 100ms)", packetInterval);
     cmd.Parse(argc, argv);
 
   srand(rnd_seed);
@@ -498,21 +568,84 @@ int main(int argc, char *argv[])
     Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting(remoteHost->GetObject<Ipv4>());
     remoteHostStaticRouting->AddNetworkRouteTo(Ipv4Address("7.0.0.0"), Ipv4Mask("255.0.0.0"), 1);
  
-    // assign IP address to UEs, and install UDP downlink applications
-    uint16_t dlPort = 1234;
+    // assign IP address to UEs, and install applications
+    uint16_t dlPortBase = 1234;
+    uint16_t ulPortBase = 2234;
     ApplicationContainer clientApps;
     ApplicationContainer serverApps;
-    for (uint32_t u = 0; u < cars.GetN(); ++u)
-    {
-        Ptr<Node> ueNode = cars.Get(u);
-        UdpServerHelper dlPacketSinkHelper(dlPort);
-        serverApps.Add(dlPacketSinkHelper.Install(cars.Get(u)));
- 
-        UdpClientHelper dlClient(ueIpIface.GetAddress(u), dlPort);
-        dlClient.SetAttribute("Interval", TimeValue(MilliSeconds(10)));
-        dlClient.SetAttribute("MaxPackets", UintegerValue(10));
-        dlClient.SetAttribute("PacketSize", UintegerValue(1024));
-        clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
+    ApplicationContainer ulClientApps; // For uplink traffic
+    ApplicationContainer ulServerApps; // For uplink traffic
+    
+    if (appType == "UDP") {
+        std::cout << "Installing UDP applications" << std::endl;
+        
+        for (uint32_t u = 0; u < cars.GetN(); ++u)
+        {
+            uint16_t dlPort = dlPortBase + u; // Different port for each car
+            uint16_t ulPort = ulPortBase + u; // Different port for each car
+            
+            // Downlink: Remote host -> Car
+            UdpServerHelper dlPacketSinkHelper(dlPort);
+            serverApps.Add(dlPacketSinkHelper.Install(cars.Get(u)));
+     
+            UdpClientHelper dlClient(ueIpIface.GetAddress(u), dlPort);
+            dlClient.SetAttribute("Interval", TimeValue(packetInterval));
+            dlClient.SetAttribute("MaxPackets", UintegerValue(maxPackets));
+            dlClient.SetAttribute("PacketSize", UintegerValue(packetSize));
+            clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
+            
+            if (bidirectional) {
+                // Uplink: Car -> Remote host
+                UdpServerHelper ulPacketSinkHelper(ulPort);
+                ulServerApps.Add(ulPacketSinkHelper.Install(remoteHost));
+                
+                UdpClientHelper ulClient(internetIpIfaces.GetAddress(1), ulPort); // Remote host IP
+                ulClient.SetAttribute("Interval", TimeValue(packetInterval));
+                ulClient.SetAttribute("MaxPackets", UintegerValue(maxPackets));
+                ulClient.SetAttribute("PacketSize", UintegerValue(packetSize));
+                ulClientApps.Add(ulClient.Install(cars.Get(u))); // Car sends to remote host
+            }
+            
+            std::cout << "Car " << u << " - DL Port: " << dlPort << ", UL Port: " << ulPort << std::endl;
+        }
+    }
+    else if (appType == "TCP") {
+        std::cout << "Installing TCP applications" << std::endl;
+        
+        for (uint32_t u = 0; u < cars.GetN(); ++u)
+        {
+            uint16_t dlPort = dlPortBase + u; // Different port for each car
+            uint16_t ulPort = ulPortBase + u; // Different port for each car
+            
+            // Downlink: Remote host -> Car
+            PacketSinkHelper dlSinkHelper("ns3::TcpSocketFactory", 
+                                          InetSocketAddress(Ipv4Address::GetAny(), dlPort));
+            serverApps.Add(dlSinkHelper.Install(cars.Get(u)));
+            
+            BulkSendHelper dlBulkSendHelper("ns3::TcpSocketFactory", 
+                                            InetSocketAddress(ueIpIface.GetAddress(u), dlPort));
+            dlBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(packetSize * maxPackets));
+            dlBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
+            clientApps.Add(dlBulkSendHelper.Install(remoteHost)); // Remote host sends to car
+            
+            if (bidirectional) {
+                // Uplink: Car -> Remote host
+                PacketSinkHelper ulSinkHelper("ns3::TcpSocketFactory", 
+                                              InetSocketAddress(Ipv4Address::GetAny(), ulPort));
+                ulServerApps.Add(ulSinkHelper.Install(remoteHost));
+                
+                BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
+                                                InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
+                ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(packetSize * maxPackets));
+                ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
+                ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
+            }
+            
+            std::cout << "Car " << u << " - DL Port: " << dlPort << ", UL Port: " << ulPort << std::endl;
+        }
+    }
+    else {
+        NS_FATAL_ERROR("Invalid application type: " << appType << ". Must be UDP or TCP.");
     }
  
     // attach UEs to the closest gNB
@@ -521,9 +654,15 @@ int main(int argc, char *argv[])
     if (logging)
     {
       // Connect trace sources for packet tracking
-      // Trace UDP application layer
-      Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&UdpClientTxTrace));
-      Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpServer/Rx", MakeCallback(&PacketSinkRxTrace));
+      if (appType == "UDP") {
+          // Trace UDP application layer
+          Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&UdpClientTxTrace));
+          Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpServer/Rx", MakeCallback(&PacketSinkRxTrace));
+      } else if (appType == "TCP") {
+          // Trace TCP application layer
+          Config::Connect("/NodeList/*/ApplicationList/*/$ns3::BulkSendApplication/Tx", MakeCallback(&BulkSendTxTrace));
+          Config::Connect("/NodeList/*/ApplicationList/*/$ns3::PacketSink/Rx", MakeCallback(&TcpSinkRxTrace));
+      }
       
       // Trace Point-to-Point devices (backhaul)
       Config::Connect("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacTx", 
@@ -549,12 +688,28 @@ int main(int argc, char *argv[])
     clientApps.Start(Seconds(0.2)); // Start transmission quickly after attachment
     serverApps.Stop(Time(duration) - Seconds(0.01));
     clientApps.Stop(Time(duration) - Seconds(0.1)); // Reduced stop margin
+    
+    if (bidirectional) {
+        ulServerApps.Start(Seconds(0.1)); // Start uplink servers
+        ulClientApps.Start(Seconds(0.3)); // Start uplink clients slightly later
+        ulServerApps.Stop(Time(duration) - Seconds(0.01));
+        ulClientApps.Stop(Time(duration) - Seconds(0.1));
+        std::cout << "Bidirectional traffic enabled (uplink + downlink)" << std::endl;
+    } else {
+        std::cout << "Unidirectional traffic (downlink only)" << std::endl;
+    }
  
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
 
-    Simulator::Schedule(Seconds(0.1), []() {
-        std::cout << "============= Starting UDP client and server applications =============" << std::endl;
+    Simulator::Schedule(Seconds(0.1), [appType, bidirectional]() {
+        std::cout << "============= Starting " << appType << " applications ";
+        if (bidirectional) {
+            std::cout << "(bidirectional) =============";
+        } else {
+            std::cout << "(downlink only) =============";
+        }
+        std::cout << std::endl;
     });
 
 
@@ -573,13 +728,68 @@ int main(int argc, char *argv[])
     
     Simulator::Run();
 
-    for (uint32_t u = 0; u < serverApps.GetN(); ++u)
-    {
-        Ptr<UdpServer> serverApp = serverApps.Get(u)->GetObject<UdpServer>();
-        auto receivedPackets = serverApp->GetReceived();
-        std::cout << "Car Node " << serverApp->GetNode()->GetId() 
-                  << " received packets: " << receivedPackets << (receivedPackets == 10 ? " \t✅" : " \t❌") << std::endl;
-
+    // Print statistics
+    std::cout << "\n============= TRAFFIC STATISTICS =============" << std::endl;
+    std::cout << "Application Type: " << appType << std::endl;
+    std::cout << "Traffic Mode: " << (bidirectional ? "Bidirectional" : "Downlink only") << std::endl;
+    std::cout << "Packet Size: " << packetSize << " bytes" << std::endl;
+    std::cout << "Max Packets: " << maxPackets << std::endl;
+    std::cout << "Packet Interval: " << packetInterval.GetMilliSeconds() << "ms" << std::endl;
+    
+    std::cout << "\n--- DOWNLINK STATISTICS (Remote Host -> Car) ---" << std::endl;
+    
+    if (appType == "UDP") {
+        for (uint32_t u = 0; u < serverApps.GetN(); ++u)
+        {
+            Ptr<UdpServer> serverApp = serverApps.Get(u)->GetObject<UdpServer>();
+            auto receivedPackets = serverApp->GetReceived();
+            auto totalBytes = receivedPackets * packetSize;
+            
+            std::cout << "Car Node " << serverApp->GetNode()->GetId() 
+                      << " - Packets: " << receivedPackets << "/" << maxPackets
+                      << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
+                      << "Total Bytes: " << totalBytes 
+                      << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
+        }
+    } else if (appType == "TCP") {
+        for (uint32_t u = 0; u < serverApps.GetN(); ++u)
+        {
+            Ptr<PacketSink> sinkApp = serverApps.Get(u)->GetObject<PacketSink>();
+            auto totalBytes = sinkApp->GetTotalRx();
+            
+            std::cout << "Car Node " << sinkApp->GetNode()->GetId() 
+                      << " - Total Bytes: " << totalBytes
+                      << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
+                      << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌") << std::endl;
+        }
+    }
+    
+    if (bidirectional) {
+        std::cout << "\n--- UPLINK STATISTICS (Car -> Remote Host) ---" << std::endl;
+        
+        if (appType == "UDP") {
+            for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
+            {
+                Ptr<UdpServer> ulServerApp = ulServerApps.Get(u)->GetObject<UdpServer>();
+                auto receivedPackets = ulServerApp->GetReceived();
+                auto totalBytes = receivedPackets * packetSize;
+                
+                std::cout << "Remote Host - Packets: " << receivedPackets << "/" << maxPackets
+                          << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
+                          << "Total Bytes: " << totalBytes
+                          << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
+            }
+        } else if (appType == "TCP") {
+            for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
+            {
+                Ptr<PacketSink> ulSinkApp = ulServerApps.Get(u)->GetObject<PacketSink>();
+                auto totalBytes = ulSinkApp->GetTotalRx();
+                
+                std::cout << "Remote Host - Total Bytes: " << totalBytes
+                    << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
+                    << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌") << std::endl;
+            }
+        }
     }
 
     Simulator::Destroy();
