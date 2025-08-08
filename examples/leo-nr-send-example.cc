@@ -34,6 +34,10 @@ static bool logging = true; // whether to enable logging from the simulation, an
 // Map to store transmission times for delay calculation
 static std::map<uint32_t, Time> packetTxTimeMap;
 
+// Maps to track gNB-UE connections
+static std::map<uint32_t, uint32_t> ueToGnbMap; // UE node ID -> gNB node ID
+static std::map<uint32_t, uint32_t> gnbToSatelliteMap; // gNB net device index -> satellite node ID
+
 
 // Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
 //
@@ -244,6 +248,44 @@ void BulkSendTxTrace(std::string context, Ptr<const Packet> packet)
               << "Size=" << packetSize << " bytes, "
               << "PacketId=" << packetId << ", "
               << "Context=" << context << std::endl;
+}
+
+// Function to populate UE-gNB mapping
+void PopulateUeGnbMapping(NetDeviceContainer ueNetDev, NetDeviceContainer gnbNetDev, NodeContainer cars, NodeContainer satellites)
+{
+    // Clear existing mappings
+    ueToGnbMap.clear();
+    gnbToSatelliteMap.clear();
+    
+    // Map gNB net device index to satellite node ID
+    for (uint32_t i = 0; i < gnbNetDev.GetN(); ++i) {
+        Ptr<Node> satellite = gnbNetDev.Get(i)->GetNode();
+        gnbToSatelliteMap[i] = satellite->GetId();
+    }
+    
+    // Find which gNB each UE is attached to by checking signal strength/distance
+    for (uint32_t u = 0; u < cars.GetN(); ++u) {
+        Ptr<Node> ueNode = cars.Get(u);
+        Ptr<MobilityModel> ueMobility = ueNode->GetObject<MobilityModel>();
+        
+        double minDistance = std::numeric_limits<double>::max();
+        uint32_t closestGnbIdx = 0;
+        
+        for (uint32_t g = 0; g < satellites.GetN(); ++g) {
+            Ptr<Node> gnbNode = satellites.Get(g);
+            Ptr<MobilityModel> gnbMobility = gnbNode->GetObject<MobilityModel>();
+            
+            double distance = ueMobility->GetDistanceFrom(gnbMobility);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestGnbIdx = g;
+            }
+        }
+        
+        ueToGnbMap[ueNode->GetId()] = gnbToSatelliteMap[closestGnbIdx];
+        std::cout << "UE Node " << ueNode->GetId() << " connected to gNB/Satellite Node " 
+                  << gnbToSatelliteMap[closestGnbIdx] << " (distance: " << minDistance/1000.0 << " km)" << std::endl;
+    }
 }
 
 
@@ -650,6 +692,9 @@ int main(int argc, char *argv[])
  
     // attach UEs to the closest gNB
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
+    
+    // Populate UE-gNB mapping for statistics
+    PopulateUeGnbMapping(ueNetDev, gnbNetDev, cars, satellites);
 
     if (logging)
     {
@@ -744,8 +789,11 @@ int main(int argc, char *argv[])
             Ptr<UdpServer> serverApp = serverApps.Get(u)->GetObject<UdpServer>();
             auto receivedPackets = serverApp->GetReceived();
             auto totalBytes = receivedPackets * packetSize;
+            uint32_t carNodeId = serverApp->GetNode()->GetId();
+            uint32_t gnbNodeId = ueToGnbMap[carNodeId];
             
-            std::cout << "Car Node " << serverApp->GetNode()->GetId() 
+            std::cout << "Car Node " << carNodeId 
+                      << " (via gNB/Satellite Node " << gnbNodeId << ")"
                       << " - Packets: " << receivedPackets << "/" << maxPackets
                       << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
                       << "Total Bytes: " << totalBytes 
@@ -756,8 +804,11 @@ int main(int argc, char *argv[])
         {
             Ptr<PacketSink> sinkApp = serverApps.Get(u)->GetObject<PacketSink>();
             auto totalBytes = sinkApp->GetTotalRx();
+            uint32_t carNodeId = sinkApp->GetNode()->GetId();
+            uint32_t gnbNodeId = ueToGnbMap[carNodeId];
             
-            std::cout << "Car Node " << sinkApp->GetNode()->GetId() 
+            std::cout << "Car Node " << carNodeId 
+                      << " (via gNB/Satellite Node " << gnbNodeId << ")"
                       << " - Total Bytes: " << totalBytes
                       << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
                       << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌") << std::endl;
@@ -774,7 +825,13 @@ int main(int argc, char *argv[])
                 auto receivedPackets = ulServerApp->GetReceived();
                 auto totalBytes = receivedPackets * packetSize;
                 
-                std::cout << "Remote Host - Packets: " << receivedPackets << "/" << maxPackets
+                // Find which car sent to this uplink server (car index u)
+                uint32_t carNodeId = cars.Get(u)->GetId();
+                uint32_t gnbNodeId = ueToGnbMap[carNodeId];
+                
+                std::cout << "Remote Host - Packets from Car Node " << carNodeId 
+                          << " (via gNB/Satellite Node " << gnbNodeId << "): "
+                          << receivedPackets << "/" << maxPackets
                           << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
                           << "Total Bytes: " << totalBytes
                           << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
@@ -785,9 +842,15 @@ int main(int argc, char *argv[])
                 Ptr<PacketSink> ulSinkApp = ulServerApps.Get(u)->GetObject<PacketSink>();
                 auto totalBytes = ulSinkApp->GetTotalRx();
                 
-                std::cout << "Remote Host - Total Bytes: " << totalBytes
-                    << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
-                    << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌") << std::endl;
+                // Find which car sent to this uplink server (car index u)
+                uint32_t carNodeId = cars.Get(u)->GetId();
+                uint32_t gnbNodeId = ueToGnbMap[carNodeId];
+                
+                std::cout << "Remote Host - Bytes from Car Node " << carNodeId 
+                          << " (via gNB/Satellite Node " << gnbNodeId << "): "
+                          << totalBytes
+                          << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
+                          << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌") << std::endl;
             }
         }
     }
