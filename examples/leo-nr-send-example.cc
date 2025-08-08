@@ -71,14 +71,10 @@ void PacketSinkRxTrace(std::string context, Ptr<const Packet> packet)
     // Extract node ID for better identification
     std::string nodeInfo = "";
     uint32_t nodeId = 0;
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            std::string nodeIdStr = context.substr(nodePos + 10, endPos - nodePos - 10);
-            nodeInfo = " [Car Node" + nodeIdStr + "]";
-            nodeId = std::stoi(nodeIdStr);
-        }
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        nodeInfo = " [Car Node" + std::to_string(nodeId) + "]";
     }
     
     // For UDP downlink, this is the car receiving from remote host
@@ -116,26 +112,39 @@ void UdpClientTxTrace(std::string context, Ptr<const Packet> packet)
     // Extract node ID for better identification
     std::string nodeInfo = "";
     uint32_t nodeId = 0;
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            std::string nodeIdStr = context.substr(nodePos + 10, endPos - nodePos - 10);
-            nodeInfo = " [RemoteHost Node" + nodeIdStr + "]";
-            nodeId = std::stoi(nodeIdStr);
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        // Determine if this is a car node or remote host
+        bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
+        if (isCarNode) {
+            nodeInfo = " [Car Node" + std::to_string(nodeId) + "]";
+        } else {
+            nodeInfo = " [RemoteHost Node" + std::to_string(nodeId) + "]";
         }
     }
     
-    // Determine if this is downlink or uplink based on the destination IP
-    // For now, we'll use a different approach - check all cars to see if this matches downlink
-    for (auto& pair : ueToGnbMap) {
-        uint32_t carNodeId = pair.first;
-        // This is downlink traffic (remote host -> car)
-        std::string transferId = "dl_" + std::to_string(carNodeId);
+    // Determine traffic direction based on the sending node
+    bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
+    
+    if (isCarNode) {
+        // This is uplink traffic (car -> remote host)
+        std::string transferId = "ul_" + std::to_string(nodeId);
         if (transferStartTime.find(transferId) == transferStartTime.end()) {
             transferStartTime[transferId] = currentTime;
         }
-        break; // For now, assume single flow - this could be improved
+    } else {
+        // This is downlink traffic (remote host -> car)
+        // For downlink, we need to determine which car this is going to
+        // This is more complex as we need to look at the destination
+        for (auto& pair : ueToGnbMap) {
+            uint32_t carNodeId = pair.first;
+            std::string transferId = "dl_" + std::to_string(carNodeId);
+            if (transferStartTime.find(transferId) == transferStartTime.end()) {
+                transferStartTime[transferId] = currentTime;
+            }
+            break; // For multiple cars, this should be improved to match specific destination
+        }
     }
     
     // Store transmission time for delay calculation
@@ -189,12 +198,11 @@ void PointToPointTxTrace(std::string context, Ptr<const Packet> packet)
     
     // Extract node ID from context for better identification
     std::string nodeInfo = "";
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            nodeInfo = " Node" + context.substr(nodePos + 10, endPos - nodePos - 10);
-        }
+    uint32_t nodeId = 0;
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        nodeInfo = " Node" + std::to_string(nodeId);
     }
     
     std::cout << "[" << currentTime.GetSeconds() << "s] P2P TX" << nodeInfo << ": " 
@@ -209,12 +217,11 @@ void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
     
     // Extract node ID from context for better identification
     std::string nodeInfo = "";
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            nodeInfo = " Node" + context.substr(nodePos + 10, endPos - nodePos - 10);
-        }
+    uint32_t nodeId = 0;
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        nodeInfo = " Node" + std::to_string(nodeId);
     }
     
     std::cout << "[" << currentTime.GetSeconds() << "s] P2P RX" << nodeInfo << ": " 
@@ -225,21 +232,16 @@ void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
 // TCP trace functions
 void TcpSinkRxTrace(std::string context, Ptr<const Packet> packet, const Address &from)
 {
-    uint32_t packetId = packet->GetUid();
     uint32_t packetSize = packet->GetSize();
     Time currentTime = Simulator::Now();
     
     // Extract node ID for better identification
     std::string nodeInfo = "";
     uint32_t nodeId = 0;
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            std::string nodeIdStr = context.substr(nodePos + 10, endPos - nodePos - 10);
-            nodeInfo = " [Node" + nodeIdStr + "]";
-            nodeId = std::stoi(nodeIdStr);
-        }
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        nodeInfo = " [Node" + std::to_string(nodeId) + "]";
     }
     
     // Determine if this is downlink (car receiving) or uplink (remote host receiving)
@@ -271,14 +273,10 @@ void BulkSendTxTrace(std::string context, Ptr<const Packet> packet)
     // Extract node ID for better identification
     std::string nodeInfo = "";
     uint32_t nodeId = 0;
-    size_t nodePos = context.find("/NodeList/");
-    if (nodePos != std::string::npos) {
-        size_t endPos = context.find("/", nodePos + 10);
-        if (endPos != std::string::npos) {
-            std::string nodeIdStr = context.substr(nodePos + 10, endPos - nodePos - 10);
-            nodeInfo = " [Node" + nodeIdStr + "]";
-            nodeId = std::stoi(nodeIdStr);
-        }
+    
+    // Parse node ID directly from context string using sscanf
+    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
+        nodeInfo = " [Node" + std::to_string(nodeId) + "]";
     }
     
     // Determine if this is downlink (remote host sending) or uplink (car sending)
@@ -378,7 +376,6 @@ int main(int argc, char *argv[])
     Time mobilityPrecision = MilliSeconds(1000); // Precision for mobility updates
     bool enableGnb = true; // Whether to enable gNB transmission
     std::string appType = "UDP"; // Application type: UDP, TCP, or TCP-Unlimited
-    bool bidirectional = false; // Whether to enable bidirectional traffic
     uint32_t packetSize = 1024; // Packet size in bytes
     uint32_t maxPackets = 10; // Maximum number of packets (not used for TCP-Unlimited)
     Time packetInterval = MilliSeconds(10); // Interval between packets (not used for TCP-Unlimited)
@@ -413,7 +410,6 @@ int main(int argc, char *argv[])
                 mobilityPrecision);
     cmd.AddValue("enableGnb", "Enable gNB transmission (1) or disable (0)", enableGnb);
     cmd.AddValue("appType", "Application type: UDP, TCP, or TCP-Unlimited", appType);
-    cmd.AddValue("bidirectional", "Enable bidirectional traffic (1) or disable (0)", bidirectional);
     cmd.AddValue("packetSize", "Packet size in bytes", packetSize);
     cmd.AddValue("maxPackets", "Maximum number of packets to send (not used for TCP-Unlimited)", maxPackets);
     cmd.AddValue("packetInterval", "Interval between packets (e.g., 10ms, 100ms) - not used for TCP-Unlimited", packetInterval);
@@ -702,17 +698,16 @@ int main(int argc, char *argv[])
             dlClient.SetAttribute("PacketSize", UintegerValue(packetSize));
             clientApps.Add(dlClient.Install(remoteHost)); // Remote host sends to car
             
-            if (bidirectional) {
-                // Uplink: Car -> Remote host
-                UdpServerHelper ulPacketSinkHelper(ulPort);
-                ulServerApps.Add(ulPacketSinkHelper.Install(remoteHost));
-                
-                UdpClientHelper ulClient(internetIpIfaces.GetAddress(1), ulPort); // Remote host IP
-                ulClient.SetAttribute("Interval", TimeValue(packetInterval));
-                ulClient.SetAttribute("MaxPackets", UintegerValue(maxPackets));
-                ulClient.SetAttribute("PacketSize", UintegerValue(packetSize));
-                ulClientApps.Add(ulClient.Install(cars.Get(u))); // Car sends to remote host
-            }
+            // Uplink: Car -> Remote host
+            UdpServerHelper ulPacketSinkHelper(ulPort);
+            ulServerApps.Add(ulPacketSinkHelper.Install(remoteHost));
+            
+            UdpClientHelper ulClient(internetIpIfaces.GetAddress(1), ulPort); // Remote host IP
+            ulClient.SetAttribute("Interval", TimeValue(packetInterval));
+            ulClient.SetAttribute("MaxPackets", UintegerValue(maxPackets));
+            ulClient.SetAttribute("PacketSize", UintegerValue(packetSize));
+            ulClientApps.Add(ulClient.Install(cars.Get(u))); // Car sends to remote host
+
             
             std::cout << "Car " << u << " - DL Port: " << dlPort << ", UL Port: " << ulPort << std::endl;
         }
@@ -736,18 +731,16 @@ int main(int argc, char *argv[])
             dlBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
             clientApps.Add(dlBulkSendHelper.Install(remoteHost)); // Remote host sends to car
             
-            if (bidirectional) {
-                // Uplink: Car -> Remote host
-                PacketSinkHelper ulSinkHelper("ns3::TcpSocketFactory", 
-                                              InetSocketAddress(Ipv4Address::GetAny(), ulPort));
-                ulServerApps.Add(ulSinkHelper.Install(remoteHost));
-                
-                BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
-                                                InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
-                ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(packetSize * maxPackets));
-                ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
-                ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
-            }
+            // Uplink: Car -> Remote host
+            PacketSinkHelper ulSinkHelper("ns3::TcpSocketFactory", 
+                                            InetSocketAddress(Ipv4Address::GetAny(), ulPort));
+            ulServerApps.Add(ulSinkHelper.Install(remoteHost));
+            
+            BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
+                                            InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
+            ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(packetSize * maxPackets));
+            ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
+            ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
             
             std::cout << "Car " << u << " - DL Port: " << dlPort << ", UL Port: " << ulPort << std::endl;
         }
@@ -771,18 +764,16 @@ int main(int argc, char *argv[])
             dlBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
             clientApps.Add(dlBulkSendHelper.Install(remoteHost)); // Remote host sends to car
             
-            if (bidirectional) {
-                // Uplink: Car -> Remote host
-                PacketSinkHelper ulSinkHelper("ns3::TcpSocketFactory", 
-                                              InetSocketAddress(Ipv4Address::GetAny(), ulPort));
-                ulServerApps.Add(ulSinkHelper.Install(remoteHost));
-                
-                BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
-                                                InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
-                ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(0)); // 0 = unlimited
-                ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
-                ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
-            }
+            // Uplink: Car -> Remote host
+            PacketSinkHelper ulSinkHelper("ns3::TcpSocketFactory", 
+                                            InetSocketAddress(Ipv4Address::GetAny(), ulPort));
+            ulServerApps.Add(ulSinkHelper.Install(remoteHost));
+            
+            BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
+                                            InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
+            ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(0)); // 0 = unlimited
+            ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
+            ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
             
             std::cout << "Car " << u << " - DL Port: " << dlPort << ", UL Port: " << ulPort 
                       << " (Unlimited TCP transfer)" << std::endl;
@@ -836,27 +827,16 @@ int main(int argc, char *argv[])
     serverApps.Stop(Time(duration) - Seconds(0.01));
     clientApps.Stop(Time(duration) - Seconds(0.1)); // Reduced stop margin
     
-    if (bidirectional) {
-        ulServerApps.Start(Seconds(0.1)); // Start uplink servers
-        ulClientApps.Start(Seconds(0.3)); // Start uplink clients slightly later
-        ulServerApps.Stop(Time(duration) - Seconds(0.01));
-        ulClientApps.Stop(Time(duration) - Seconds(0.1));
-        std::cout << "Bidirectional traffic enabled (uplink + downlink)" << std::endl;
-    } else {
-        std::cout << "Unidirectional traffic (downlink only)" << std::endl;
-    }
+    ulServerApps.Start(Seconds(0.1)); // Start uplink servers
+    ulClientApps.Start(Seconds(0.3)); // Start uplink clients slightly later
+    ulServerApps.Stop(Time(duration) - Seconds(0.01));
+    ulClientApps.Stop(Time(duration) - Seconds(0.1));
  
     // enable the traces provided by the nr module
     nrHelper->EnableTraces();
 
-    Simulator::Schedule(Seconds(0.1), [appType, bidirectional]() {
-        std::cout << "============= Starting " << appType << " applications ";
-        if (bidirectional) {
-            std::cout << "(bidirectional) =============";
-        } else {
-            std::cout << "(downlink only) =============";
-        }
-        std::cout << std::endl;
+    Simulator::Schedule(Seconds(0.1), [appType]() {
+        std::cout << "============= Starting " << appType << " applications " << std::endl;
     });
 
 
@@ -878,7 +858,6 @@ int main(int argc, char *argv[])
     // Print statistics
     std::cout << "\n============= TRAFFIC STATISTICS =============" << std::endl;
     std::cout << "Application Type: " << appType << std::endl;
-    std::cout << "Traffic Mode: " << (bidirectional ? "Bidirectional" : "Downlink only") << std::endl;
     std::cout << "Packet Size: " << packetSize << " bytes" << std::endl;
     if (appType != "TCP-Unlimited") {
         std::cout << "Max Packets: " << maxPackets << std::endl;
@@ -900,7 +879,7 @@ int main(int argc, char *argv[])
             
             std::cout << "Car Node " << carNodeId 
                       << " (via gNB/Satellite Node " << gnbNodeId << ")"
-                      << " - Packets: " << receivedPackets << "/" << maxPackets
+                      << " - " << receivedPackets << "/" << maxPackets << " packets"
                       << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
                       << "Total Bytes: " << totalBytes
                       << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
@@ -941,79 +920,61 @@ int main(int argc, char *argv[])
         }
     }
     
-    if (bidirectional) {
-        std::cout << "\n--- UPLINK STATISTICS (Car -> Remote Host) ---" << std::endl;
-        
-        if (appType == "UDP") {
-            for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
-            {
-                Ptr<UdpServer> ulServerApp = ulServerApps.Get(u)->GetObject<UdpServer>();
-                auto receivedPackets = ulServerApp->GetReceived();
-                auto totalBytes = receivedPackets * packetSize;
-                
-                // Find which car sent to this uplink server (car index u)
-                uint32_t carNodeId = cars.Get(u)->GetId();
-                uint32_t gnbNodeId = ueToGnbMap[carNodeId];
-                
-                // Calculate datarate for UDP uplink
-                double dataRateMbps = 0.0;
-                std::string transferTimeInfo = "N/A";
-                
-                std::string transferId = "ul_" + std::to_string(carNodeId);
-                if (transferStartTime.find(transferId) != transferStartTime.end() && 
-                    transferEndTime.find("ul_remotehost") != transferEndTime.end()) {
-                    Time transferDuration = transferEndTime["ul_remotehost"] - transferStartTime[transferId];
-                    if (transferDuration.GetSeconds() > 0) {
-                        dataRateMbps = (totalBytes * 8.0) / (transferDuration.GetSeconds() * 1e6);
-                        transferTimeInfo = std::to_string(transferDuration.GetSeconds()) + "s";
-                    }
+    std::cout << "\n--- UPLINK STATISTICS (Car -> Remote Host) ---" << std::endl;
+    
+    if (appType == "UDP") {
+        for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
+        {
+            Ptr<UdpServer> ulServerApp = ulServerApps.Get(u)->GetObject<UdpServer>();
+            auto receivedPackets = ulServerApp->GetReceived();
+            auto totalBytes = receivedPackets * packetSize;
+            
+            // Find which car sent to this uplink server (car index u)
+            uint32_t carNodeId = cars.Get(u)->GetId();
+            uint32_t gnbNodeId = ueToGnbMap[carNodeId];
+            
+            std::cout << "Remote Host - Packets from Car Node " << carNodeId 
+                        << " (via gNB/Satellite Node " << gnbNodeId << "): "
+                        << receivedPackets << "/" << maxPackets << " packets"
+                        << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
+                        << "Total Bytes: " << totalBytes
+                        << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
+        }
+    } else if (appType == "TCP" || appType == "TCP-Unlimited") {
+        for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
+        {
+            Ptr<PacketSink> ulSinkApp = ulServerApps.Get(u)->GetObject<PacketSink>();
+            auto totalBytes = ulSinkApp->GetTotalRx();
+            
+            // Find which car sent to this uplink server (car index u)
+            uint32_t carNodeId = cars.Get(u)->GetId();
+            uint32_t gnbNodeId = ueToGnbMap[carNodeId];
+            
+            // Calculate datarate based on actual transfer time
+            double dataRateMbps = 0.0;
+            std::string transferTimeInfo = "N/A";
+            
+            std::string transferId = "ul_" + std::to_string(carNodeId);
+            if (transferStartTime.find(transferId) != transferStartTime.end() && 
+                transferEndTime.find("ul_remotehost") != transferEndTime.end()) {
+                Time transferDuration = transferEndTime["ul_remotehost"] - transferStartTime[transferId];
+                if (transferDuration.GetSeconds() > 0) {
+                    dataRateMbps = (totalBytes * 8.0) / (transferDuration.GetSeconds() * 1e6);
+                    transferTimeInfo = std::to_string(transferDuration.GetSeconds()) + "s";
                 }
-                
-                std::cout << "Remote Host - Packets from Car Node " << carNodeId 
-                          << " (via gNB/Satellite Node " << gnbNodeId << "): "
-                          << receivedPackets << "/" << maxPackets
-                          << " (" << (100.0 * receivedPackets / maxPackets) << "%), "
-                          << "Total Bytes: " << totalBytes
-                          << ", Transfer Time: " << transferTimeInfo
-                          << ", Data Rate: " << dataRateMbps << " Mbps"
-                          << (receivedPackets == maxPackets ? " ✅" : " ❌") << std::endl;
             }
-        } else if (appType == "TCP" || appType == "TCP-Unlimited") {
-            for (uint32_t u = 0; u < ulServerApps.GetN(); ++u)
-            {
-                Ptr<PacketSink> ulSinkApp = ulServerApps.Get(u)->GetObject<PacketSink>();
-                auto totalBytes = ulSinkApp->GetTotalRx();
-                
-                // Find which car sent to this uplink server (car index u)
-                uint32_t carNodeId = cars.Get(u)->GetId();
-                uint32_t gnbNodeId = ueToGnbMap[carNodeId];
-                
-                // Calculate datarate based on actual transfer time
-                double dataRateMbps = 0.0;
-                std::string transferTimeInfo = "N/A";
-                
-                std::string transferId = "ul_" + std::to_string(carNodeId);
-                if (transferStartTime.find(transferId) != transferStartTime.end() && 
-                    transferEndTime.find("ul_remotehost") != transferEndTime.end()) {
-                    Time transferDuration = transferEndTime["ul_remotehost"] - transferStartTime[transferId];
-                    if (transferDuration.GetSeconds() > 0) {
-                        dataRateMbps = (totalBytes * 8.0) / (transferDuration.GetSeconds() * 1e6);
-                        transferTimeInfo = std::to_string(transferDuration.GetSeconds()) + "s";
-                    }
-                }
-                
-                std::cout << "Remote Host - Bytes from Car Node " << carNodeId 
-                          << " (via gNB/Satellite Node " << gnbNodeId << "): "
-                          << totalBytes
-                          << ", Transfer Time: " << transferTimeInfo
-                          << ", Data Rate: " << dataRateMbps << " Mbps";
-                
-                if (appType == "TCP") {
-                    std::cout << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
-                              << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌");
-                }
-                std::cout << std::endl;
+            
+            std::cout << "Remote Host - Bytes from Car Node " << carNodeId 
+                        << " (via gNB/Satellite Node " << gnbNodeId << "): "
+                        << totalBytes
+                        << ", Transfer Time: " << transferTimeInfo
+                        << ", Data Rate: " << dataRateMbps << " Mbps";
+            
+            if (appType == "TCP") {
+                std::cout << " (" << (100.0 * totalBytes / (packetSize * maxPackets)) << "%) "
+                            << (totalBytes >= packetSize * maxPackets ? " ✅" : " ❌");
             }
+            std::cout << std::endl;
         }
     }
 

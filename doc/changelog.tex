@@ -513,6 +513,39 @@ Di seguito si mostrerà come si comportano le antenne in queste diverse configur
     \item Note: in posizioni dislocate i pacchetti non vengono tutti ricevuti, SINR passa a -20/-22dB
 \end{itemize}
 
+\section{Utilizzo di applicazioni per la comunicazione aggiuntivi}
+
+Durante lo sviluppo del simulatore sono state implementate diverse migliorie per supportare la misurazione accurata del throughput e gestire diversi tipi di applicazioni di rete:
+
+\begin{itemize}
+\item
+  Supporto per TCP in 2 modalità: una limitata e una illimitata
+\item
+  Nella modalità limitata, il numero di pacchetti da trasmettere è fissato
+\item
+  Nella modalità illimitata non ci sono restrizioni sul numero di pacchetti, ed è possibile verificare il datarate massimo ottenibile in una connessione satellite-veicolo
+\item
+  Implementazione di comunicazioni bidirezionali per tutti i protocolli, con applicazioni che possono inviare e ricevere pacchetti in modo continuo
+\item
+  Calcolo del datarate per TCP tenendo conto del numero di byte ricevuto e del tempo trascorso dal primo all'ultimo pacchetto ricevuto
+\item
+  I log ora sono personalizzati e mostrano il percorso che i pacchetti hanno seguito, con informazioni aggiuntive sul trasferimento.
+\end{itemize}
+
+\subsection{Output delle statistiche migliorato}
+
+Il sistema di output delle statistiche è stato migliorato per fornire informazioni dettagliate sui trasferimenti:
+
+\textbf{Informazioni mostrate:}
+\begin{itemize}
+    \item Numero di pacchetti trasmessi/ricevuti con percentuale di successo
+    \item Tempo di trasferimento effettivo (non tempo di simulazione)
+    \item Datarate in Mbps basato sul tempo di trasferimento reale
+    \item Indicatori visivi di successo (✅/❌) per ogni connessione
+    \item Informazioni dettagliate sui nodi coinvolti (auto, satellite/gNB)
+    \item Informazioni rilasciate per ogni auto coinvolta nella simulazione
+\end{itemize}
+
 \section{BUG REPORT}
 
 \begin{lstlisting}[
