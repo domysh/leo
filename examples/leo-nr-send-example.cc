@@ -22,8 +22,9 @@
 #include "ns3/nr-module.h"
 #include "ns3/nr-point-to-point-epc-helper.h"
 #include "ns3/point-to-point-helper.h"
-#include "ns3/nr-pdcp-header.h" // Include the PDCP header definition
+#include "ns3/nr-pdcp-header.h"
 #include "ns3/packet.h"
+#include "ns3/ppp-header.h"
 
 using namespace ns3;
 
@@ -38,15 +39,117 @@ static std::map<uint32_t, Time> packetTxTimeMap;
 static std::map<uint32_t, uint32_t> ueToGnbMap; // UE node ID -> gNB node ID
 static std::map<uint32_t, uint32_t> gnbToSatelliteMap; // gNB net device index -> satellite node ID
 
+// Map to track IP addresses to car node IDs
+static std::map<Ipv4Address, uint32_t> ipToCarNodeMap; // IP address (as uint32_t) -> car node ID
+static std::map<uint32_t, pair<uint32_t, bool>> packetIdCarNodeMap; // car packet ID -> car node ID, isUplink
+
 // Maps to track transfer times for datarate calculation
-// Key format: "direction_carIndex" (e.g., "dl_0", "ul_0")
+// Key format: "direction_carIndex" (e.g., "dl_0", "ul_0"), the id is always relative to the car
 static std::map<std::string, Time> transferStartTime; // Transfer ID -> first packet transmission time
 static std::map<std::string, Time> transferEndTime;   // Transfer ID -> last packet reception time
 
+Ipv4Address remoteHostIp;
+uint32_t remoteHostNodeId;
 
-// Copyright (c) 2019 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
-//
-// SPDX-License-Identifier: GPL-2.0-only
+
+void ConnectionLogAndTrace(std::string context, Ptr<const Packet> pkt, std::string proto, bool isRx){
+    Ptr<Packet> packet = pkt->Copy();
+    Ipv4Header ipv4Header;
+    uint32_t packetId = packet->GetUid();
+    uint32_t packetSize = packet->GetSize();
+    Time currentTime = Simulator::Now();
+    uint32_t carNodeId = 0;
+    bool carIdFound = false;
+    bool isUplink = false;
+    std::string deviceType = "";
+
+    if (context.find("NrGnbNetDevice") != std::string::npos) {
+        deviceType = "{ Satellite gNB } ";
+    } else if (context.find("NrUeNetDevice") != std::string::npos) {
+        deviceType = "{ Car UE } ";
+    }
+
+    // Packet trace detection:
+
+    // 1. Old data on packet_id map
+    auto it = packetIdCarNodeMap.find(packetId);
+    if (it != packetIdCarNodeMap.end()) {
+        carNodeId = it->second.first;
+        isUplink = it->second.second;
+        carIdFound = true;
+    }
+
+    // 2. IPv4 Header
+    if (!carIdFound){
+        //Removing possible initial headers
+        PppHeader pppHeader;
+        packet->RemoveHeader(pppHeader);
+
+        // Use PeekHeader() to try and extract the header
+        if (packet->PeekHeader(ipv4Header)){
+            auto dest = ipv4Header.GetDestination();
+            isUplink = (dest == remoteHostIp);
+            
+            auto association = ipToCarNodeMap.find(isUplink ? ipv4Header.GetSource() : ipv4Header.GetDestination());
+            if (association != ipToCarNodeMap.end()) {
+                carNodeId = association->second;
+                carIdFound = true;
+            }
+        }
+    }
+    //3. Context-based extraction
+    if (!carIdFound){
+        // Parse node ID directly from context string using sscanf
+        if (sscanf(context.c_str(), "/NodeList/%u/", &carNodeId) == 1) {
+            if (ueToGnbMap.find(carNodeId) != ueToGnbMap.end()){
+                carIdFound = true;
+                isUplink = !isRx;
+            }
+        }
+    }
+
+    // Fallback on tracking packet
+    if (!carIdFound){
+        std::cout << "[" << currentTime.GetSeconds() << "s] " << proto << " " << (isRx ? "RX" : "TX") << ": "
+                  << "Unknown Car Node, " << deviceType << "PacketID=" << packetId << ", Context=" << context << std::endl;
+        return;
+
+    }
+
+    packetIdCarNodeMap[packetId] = make_pair(carNodeId, isUplink);
+    std::string transferId = (isUplink ? "ul_" : "dl_") + std::to_string(carNodeId);
+    
+    if (isRx) {
+        //Take the latest time
+        transferEndTime[transferId] = currentTime;
+    }else{
+        //Take only the first time
+        if (transferStartTime.find(transferId) == transferStartTime.end()) {
+            transferStartTime[transferId] = currentTime;
+        }
+    }
+    // Calculate delay if we have the transmission time
+    std::string delayStr = "N/A";
+    if (isRx){
+        auto txTimeMapElement = packetTxTimeMap.find(packetId);
+        if (txTimeMapElement != packetTxTimeMap.end()) {
+            Time delay = currentTime - txTimeMapElement->second;
+            delayStr = std::to_string(delay.GetMilliSeconds()) + "ms";
+        }
+    }else{
+        if (packetTxTimeMap.find(packetId) == packetTxTimeMap.end()){
+            packetTxTimeMap[packetId] = currentTime;
+        }
+    }
+    std::cout
+        <<"[" << currentTime.GetSeconds() << "s] " << proto << " " << (isRx ? "RX" : "TX") << " " << deviceType
+        << "(" << (isUplink ? "From" : "To") << " Car Node " << std::to_string(carNodeId) << "): " 
+        << "Size=" << packetSize << " bytes" << (isRx ? (std::string(", Delay=") + delayStr) : "")
+        << ", PacketID=" << packetId << std::endl;
+
+}
+
+
 
 NS_LOG_COMPONENT_DEFINE ("LeoNrSendExample");
 
@@ -62,256 +165,51 @@ void CourseChange (std::string context, Ptr<const MobilityModel> position)
     }
 }
 
+
 void PacketSinkRxTrace(std::string context, Ptr<const Packet> packet)
 {
-    uint32_t packetId = packet->GetUid();
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        nodeInfo = " [Car Node" + std::to_string(nodeId) + "]";
-    }
-    
-    // For UDP downlink, this is the car receiving from remote host
-    // Find which car index this corresponds to
-    for (auto& pair : ueToGnbMap) {
-        if (pair.first == nodeId) {
-            // Find car index by node ID
-            std::string transferId = "dl_" + std::to_string(nodeId);
-            transferEndTime[transferId] = currentTime;
-            break;
-        }
-    }
-    
-    // Calculate delay if we have the transmission time
-    std::string delayStr = "N/A";
-    if (packetTxTimeMap.find(packetId) != packetTxTimeMap.end()) {
-        Time delay = currentTime - packetTxTimeMap[packetId];
-        delayStr = std::to_string(delay.GetMilliSeconds()) + "ms";
-        // Remove from map to save memory
-        packetTxTimeMap.erase(packetId);
-    }
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] UDP RX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "Delay=" << delayStr << ", "
-              << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "UDP", true);
 }
 
 void UdpClientTxTrace(std::string context, Ptr<const Packet> packet)
 {
-    uint32_t packetId = packet->GetUid();
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        // Determine if this is a car node or remote host
-        bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
-        if (isCarNode) {
-            nodeInfo = " [Car Node" + std::to_string(nodeId) + "]";
-        } else {
-            nodeInfo = " [RemoteHost Node" + std::to_string(nodeId) + "]";
-        }
-    }
-    
-    // Determine traffic direction based on the sending node
-    bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
-    
-    if (isCarNode) {
-        // This is uplink traffic (car -> remote host)
-        std::string transferId = "ul_" + std::to_string(nodeId);
-        if (transferStartTime.find(transferId) == transferStartTime.end()) {
-            transferStartTime[transferId] = currentTime;
-        }
-    } else {
-        // This is downlink traffic (remote host -> car)
-        // For downlink, we need to determine which car this is going to
-        // This is more complex as we need to look at the destination
-        for (auto& pair : ueToGnbMap) {
-            uint32_t carNodeId = pair.first;
-            std::string transferId = "dl_" + std::to_string(carNodeId);
-            if (transferStartTime.find(transferId) == transferStartTime.end()) {
-                transferStartTime[transferId] = currentTime;
-            }
-            break; // For multiple cars, this should be improved to match specific destination
-        }
-    }
-    
-    // Store transmission time for delay calculation
-    packetTxTimeMap[packetId] = currentTime;
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] UDP TX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "PacketId=" << packetId << ", "
-              << "Context=" << context << std::endl;
-}
-
-
-
-void
-TxDataTrace (std::string context, Ptr<const Packet> p, const ns3::Address& addr)
-{
-    // Determine if this is gNB or UE based on context
-    std::string deviceType = "5G";
-    if (context.find("NrGnbNetDevice") != std::string::npos) {
-        deviceType = "gNB (Satellite)";
-    } else if (context.find("NrUeNetDevice") != std::string::npos) {
-        deviceType = "UE (Car)";
-    }
-    
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] " << deviceType << " TX: " 
-          << "Size=" << p->GetSize() << " bytes, "
-          << "Destination=" << addr << ", "
-          << "Context=" << context << std::endl;
-}
-
-void
-RxDataTrace (std::string context, Ptr<const Packet> p)
-{
-    // Determine if this is gNB or UE based on context
-    std::string deviceType = "5G";
-    if (context.find("NrGnbNetDevice") != std::string::npos) {
-        deviceType = "gNB (Satellite)";
-    } else if (context.find("NrUeNetDevice") != std::string::npos) {
-        deviceType = "UE (Car)";
-    }
-    
-    std::cout << "[" << Simulator::Now().GetSeconds() << "s] " << deviceType << " RX: " 
-          << "Size=" << p->GetSize() << " bytes, "
-          << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "UDP", false);
 }
 
 void PointToPointTxTrace(std::string context, Ptr<const Packet> packet)
 {
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID from context for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        nodeInfo = " Node" + std::to_string(nodeId);
-    }
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] P2P TX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "P2P", false);
 }
 
 void PointToPointRxTrace(std::string context, Ptr<const Packet> packet)
 {
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID from context for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        nodeInfo = " Node" + std::to_string(nodeId);
-    }
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] P2P RX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "P2P", true);
 }
 
-// TCP trace functions
 void TcpSinkRxTrace(std::string context, Ptr<const Packet> packet, const Address &from)
 {
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        nodeInfo = " [Node" + std::to_string(nodeId) + "]";
-    }
-    
-    // Determine if this is downlink (car receiving) or uplink (remote host receiving)
-    bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
-    
-    if (isCarNode) {
-        // This is downlink traffic (remote host -> car)
-        std::string transferId = "dl_" + std::to_string(nodeId);
-        transferEndTime[transferId] = currentTime;
-    } else {
-        // This is uplink traffic (car -> remote host)
-        // We need to find which car sent this - this is more complex
-        // For now, use a general uplink identifier
-        transferEndTime["ul_remotehost"] = currentTime;
-    }
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] TCP RX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "From=" << from << ", "
-              << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "TCP", true);
 }
 
 void BulkSendTxTrace(std::string context, Ptr<const Packet> packet)
 {
-    uint32_t packetId = packet->GetUid();
-    uint32_t packetSize = packet->GetSize();
-    Time currentTime = Simulator::Now();
-    
-    // Extract node ID for better identification
-    std::string nodeInfo = "";
-    uint32_t nodeId = 0;
-    
-    // Parse node ID directly from context string using sscanf
-    if (sscanf(context.c_str(), "/NodeList/%u/", &nodeId) == 1) {
-        nodeInfo = " [Node" + std::to_string(nodeId) + "]";
-    }
-    
-    // Determine if this is downlink (remote host sending) or uplink (car sending)
-    bool isCarNode = ueToGnbMap.find(nodeId) != ueToGnbMap.end();
-    
-    if (isCarNode) {
-        // This is uplink traffic (car -> remote host)
-        std::string transferId = "ul_" + std::to_string(nodeId);
-        if (transferStartTime.find(transferId) == transferStartTime.end()) {
-            transferStartTime[transferId] = currentTime;
-        }
-    } else {
-        // This is downlink traffic (remote host -> car)
-        // For multiple cars, we need to be smarter about which car this is for
-        for (auto& pair : ueToGnbMap) {
-            uint32_t carNodeId = pair.first;
-            std::string transferId = "dl_" + std::to_string(carNodeId);
-            if (transferStartTime.find(transferId) == transferStartTime.end()) {
-                transferStartTime[transferId] = currentTime;
-            }
-            break; // For now, assume single flow - this could be improved
-        }
-    }
-    
-    // Store transmission time for delay calculation
-    packetTxTimeMap[packetId] = currentTime;
-    
-    std::cout << "[" << currentTime.GetSeconds() << "s] TCP TX" << nodeInfo << ": " 
-              << "Size=" << packetSize << " bytes, "
-              << "PacketId=" << packetId << ", "
-              << "Context=" << context << std::endl;
+    ConnectionLogAndTrace(context, packet, "TCP", false);
 }
 
+void TxDataTrace (std::string context, Ptr<const Packet> p, const ns3::Address& addr)
+{
+    ConnectionLogAndTrace(context, p, "5G", false);
+}
+
+void RxDataTrace (std::string context, Ptr<const Packet> p)
+{
+    ConnectionLogAndTrace(context, p, "5G", true);
+}
+
+
+
 // Function to populate UE-gNB mapping
-void PopulateUeGnbMapping(NetDeviceContainer ueNetDev, NetDeviceContainer gnbNetDev, NodeContainer cars, NodeContainer satellites)
+void PopulateUeGnbMapping(NetDeviceContainer ueNetDev, NetDeviceContainer gnbNetDev, NodeContainer cars, NodeContainer satellites, Ipv4InterfaceContainer ueIpIface)
 {
     // Clear existing mappings
     ueToGnbMap.clear();
@@ -325,6 +223,14 @@ void PopulateUeGnbMapping(NetDeviceContainer ueNetDev, NetDeviceContainer gnbNet
     for (uint32_t i = 0; i < gnbNetDev.GetN(); ++i) {
         Ptr<Node> satellite = gnbNetDev.Get(i)->GetNode();
         gnbToSatelliteMap[i] = satellite->GetId();
+    }
+
+    // Populate IP to Car Node mapping
+    for (uint32_t i = 0; i < cars.GetN(); ++i) {
+        Ipv4Address carIp = ueIpIface.GetAddress(i);
+        uint32_t carNodeId = cars.Get(i)->GetId();
+        ipToCarNodeMap[carIp] = carNodeId;
+        std::cout << "Car Node " << carNodeId << " assigned IP: " << carIp << std::endl;
     }
     
     // Find which gNB each UE is attached to by checking signal strength/distance
@@ -648,7 +554,7 @@ int main(int argc, char *argv[])
     Ipv4InterfaceContainer ueIpIface;
     ueIpIface = nrEpcHelper->AssignUeIpv4Address(NetDeviceContainer(ueNetDev));
     
-    // Install applications on remote host (satellite) connected to PGW
+    // Install applications on remote host (satellite) connected to PGW (Packet Data Network Gateway)
     Ptr<Node> pgw = nrEpcHelper->GetPgwNode();
     
     // Create the remote host
@@ -667,6 +573,9 @@ int main(int argc, char *argv[])
     Ipv4AddressHelper ipv4h;
     ipv4h.SetBase("1.0.0.0", "255.0.0.0");
     Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign(internetDevices);
+
+    remoteHostIp = internetIpIfaces.GetAddress(1);
+    remoteHostNodeId = remoteHost->GetId();
  
     Ipv4StaticRoutingHelper ipv4RoutingHelper;
     Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting(remoteHost->GetObject<Ipv4>());
@@ -701,8 +610,8 @@ int main(int argc, char *argv[])
             // Uplink: Car -> Remote host
             UdpServerHelper ulPacketSinkHelper(ulPort);
             ulServerApps.Add(ulPacketSinkHelper.Install(remoteHost));
-            
-            UdpClientHelper ulClient(internetIpIfaces.GetAddress(1), ulPort); // Remote host IP
+
+            UdpClientHelper ulClient(remoteHostIp, ulPort); // Remote host IP
             ulClient.SetAttribute("Interval", TimeValue(packetInterval));
             ulClient.SetAttribute("MaxPackets", UintegerValue(maxPackets));
             ulClient.SetAttribute("PacketSize", UintegerValue(packetSize));
@@ -737,7 +646,7 @@ int main(int argc, char *argv[])
             ulServerApps.Add(ulSinkHelper.Install(remoteHost));
             
             BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
-                                            InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
+                                            InetSocketAddress(remoteHostIp, ulPort));
             ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(packetSize * maxPackets));
             ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
             ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
@@ -770,7 +679,7 @@ int main(int argc, char *argv[])
             ulServerApps.Add(ulSinkHelper.Install(remoteHost));
             
             BulkSendHelper ulBulkSendHelper("ns3::TcpSocketFactory", 
-                                            InetSocketAddress(internetIpIfaces.GetAddress(1), ulPort));
+                                            InetSocketAddress(remoteHostIp, ulPort));
             ulBulkSendHelper.SetAttribute("MaxBytes", UintegerValue(0)); // 0 = unlimited
             ulBulkSendHelper.SetAttribute("SendSize", UintegerValue(packetSize));
             ulClientApps.Add(ulBulkSendHelper.Install(cars.Get(u))); // Car sends to remote host
@@ -787,7 +696,7 @@ int main(int argc, char *argv[])
     nrHelper->AttachToClosestGnb(ueNetDev, gnbNetDev);
     
     // Populate UE-gNB mapping for statistics
-    PopulateUeGnbMapping(ueNetDev, gnbNetDev, cars, satellites);
+    PopulateUeGnbMapping(ueNetDev, gnbNetDev, cars, satellites, ueIpIface);
 
     if (logging)
     {
@@ -842,16 +751,6 @@ int main(int argc, char *argv[])
 
     Simulator::Stop (Time (duration));
     std::cout << "============= Starting simulation for " << duration << " =============" << std::endl;
-    
-    /*
-    Time printInterval = Seconds(5);
-    Time simDuration = Time(duration);
-    for (Time t = printInterval; t < simDuration; t += printInterval) {
-        Simulator::Schedule(t, [t]() {
-            std::cout << "Simulation time: " << t.GetSeconds() << "s" << std::endl;
-        });
-    }
-    */
     
     Simulator::Run();
 
@@ -956,8 +855,8 @@ int main(int argc, char *argv[])
             
             std::string transferId = "ul_" + std::to_string(carNodeId);
             if (transferStartTime.find(transferId) != transferStartTime.end() && 
-                transferEndTime.find("ul_remotehost") != transferEndTime.end()) {
-                Time transferDuration = transferEndTime["ul_remotehost"] - transferStartTime[transferId];
+                transferEndTime.find(transferId) != transferEndTime.end()) {
+                Time transferDuration = transferEndTime[transferId] - transferStartTime[transferId];
                 if (transferDuration.GetSeconds() > 0) {
                     dataRateMbps = (totalBytes * 8.0) / (transferDuration.GetSeconds() * 1e6);
                     transferTimeInfo = std::to_string(transferDuration.GetSeconds()) + "s";
@@ -976,6 +875,22 @@ int main(int argc, char *argv[])
             }
             std::cout << std::endl;
         }
+    }
+
+    std::cout << "\n--- TRANSFER TIMING DETAILS ---" << std::endl;
+    std::cout << "Transfer Start Times:" << std::endl;
+    for (const auto& pair : transferStartTime) {
+        std::cout << "  " << pair.first << ": " << pair.second.GetSeconds() << "s" << std::endl;
+    }
+    std::cout << "Transfer End Times:" << std::endl;
+    for (const auto& pair : transferEndTime) {
+        std::cout << "  " << pair.first << ": " << pair.second.GetSeconds() << "s" << std::endl;
+    }
+    
+    std::cout << "IP to Car Node Mapping:" << std::endl;
+    for (const auto& pair : ipToCarNodeMap) {
+        Ipv4Address ip(pair.first);
+        std::cout << "  IP " << ip << " -> Car Node " << pair.second << std::endl;
     }
 
     Simulator::Destroy();
