@@ -4,12 +4,33 @@
 \usepackage[italian]{babel}
 \usepackage[margin=2cm]{geometry}
 \usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{booktabs}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{float}
 \usepackage{url}
 \usepackage[breaklinks=true]{hyperref}
 \usepackage{xurl}
+
+% Configurazioni per evitare l'intreccio di figure e tabelle
+\usepackage{placeins} % Fornisce il comando \FloatBarrier
+\usepackage{afterpage} % Per controlli di posizionamento avanzati
+
+% Impostazioni per il posizionamento dei float
+\renewcommand{\topfraction}{0.9}       % max fraction of floats at top
+\renewcommand{\bottomfraction}{0.8}    % max fraction of floats at bottom
+\setcounter{topnumber}{2}              % max floats at top
+\setcounter{bottomnumber}{1}           % max floats at bottom
+\setcounter{totalnumber}{3}            % max floats per page
+\renewcommand{\textfraction}{0.07}     % min text on page
+\renewcommand{\floatpagefraction}{0.7} % min for a float page
+
+% Evita che le figure si spostino oltre la sezione
+\let\oldsection\section
+\renewcommand\section{\FloatBarrier\oldsection}
+\let\oldsubsection\subsection  
+\renewcommand\subsection{\FloatBarrier\oldsubsection}
 \lstset{
     basicstyle=\footnotesize\ttfamily,
     breaklines=true,
@@ -78,7 +99,7 @@ Il mobility model è stato sviluppato partendo dall'esempio di tracciamento orbi
   Sviluppo di uno script Python per la visualizzazione tridimensionale dei punti elaborati dall'esempio precedente, utilizzando matplotlib per la rappresentazione grafica dei risultati (come mostrato in Figura~\ref{fig:car_move_model})
 \end{itemize}
 
-\begin{figure}[!htb]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{assets/move-model.jpg}
     \caption{Esempi di grafici del modello di movimento}\label{fig:car_move_model}
@@ -109,7 +130,7 @@ In alternativa, il progetto Hypatia~\cite{hypatia} utilizza ns3-satellite~\cite{
 \end{itemize}
 
 
-\begin{figure}[!htb]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{assets/new_vis_trace_orbits.png}
     \caption{Orbits tracing with plotly with interactive interface GPU accelerated}\label{fig:new_vis_trace_orbits}
@@ -140,7 +161,7 @@ In alternativa, il progetto Hypatia~\cite{hypatia} utilizza ns3-satellite~\cite{
 \section{Report di test e i relativi risultati}\label{report-di-test-e-i-relativi-risultati}
 Si riportano i seguenti test relativi ai risultati ottenuti dall'esecuzione dell'esempio con 5g lena dal codice nel commit \href{https://github.com/domysh/leo/tree/302099845e6bb4bc3e0cd30ef0e7e7a88d0ead11}{302099845e6bb4bc3e0cd30ef0e7e7a88d0ead11} dal file elaborato da 5g-lena usando i parametri di default ma abilitando il logging (tramite --logging) dal file DlDataSinr:
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|}
     \hline
@@ -171,7 +192,7 @@ Si riportano i seguenti test relativi ai risultati ottenuti dall'esecuzione dell
 
 
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|}
     \hline
@@ -195,7 +216,7 @@ Mentre aumentando la potenza in trasmissione ad 80dB, i 10 pacchetti UDP non sub
 
 Le latenze si mantengono sui 2ms e i pacchetti correttamente riscontrati, come verificabile nel file RxedUePhyDlDciTrace e NrDlRxRlcStats (dalla simulazione ad 80dB):
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|l|}
     \hline
@@ -214,7 +235,7 @@ Le latenze si mantengono sui 2ms e i pacchetti correttamente riscontrati, come v
     \caption{NrDlRxRlcStats (txPower gNB ad 80 dB)}
 \end{table}
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|l|l|l|l|l|}
     \hline
@@ -267,7 +288,7 @@ Le latenze si mantengono sui 2ms e i pacchetti correttamente riscontrati, come v
 
 Si risportano inoltre alcuni valori di pathloss calcolati nel file DlPathlossTrace su una simulazione di lunga durata:
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|}
     \hline
@@ -348,7 +369,7 @@ Duranti alcuni test nelle simulazioni con UDP, sono state posizionate 10 automob
 
 In un ulteriore esempio sono state usate 10 orbite a 300km di altitudine a 20° di inclinazione distribuite uniformemente su tutte le longitudini con 10 satelliti a offset equidistanti nella stessa orbite, per ciascuna orbita, per un totale di 100 satelliti (\textit{LeoOrbitNodeHelper::Install (LeoOrbit(300.0, 20, 10, 10));}) e come nell'esempio precedente 10 auto distribuite causalmente sulla superficie terrestre, con direzioni casuali. Anche in questo caso, tutti i pacchetti sono stati ricevuti correttamente da ciascuna automobile, ma ci sono stati dei pacchetti corrotti, delle ritrasmissioni, i valori di SINR sono risultati molto variabili come mostrato nella Tabella~\ref{tab:sinr_values_multi_car_one_sat_example} e i valori di pathloss meno suscettibili a variazioni, come mostrato nella Tabella~\ref{tab:pathloss_values_multi_car_one_sat_example}. Le latenze emerse dai log sono state mediamente 3-4ms con picchi sporadici a 9ms, probabilmente dovuti a ritrasmissioni o errori di comunicazione.
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|}
     \hline
@@ -388,7 +409,7 @@ In un ulteriore esempio sono state usate 10 orbite a 300km di altitudine a 20° 
 \end{table}
 
 
-\begin{table}[!ht]
+\begin{table}[H]
     \centering
     \begin{tabular}{|l|l|l|l|l|}
     \hline
@@ -540,9 +561,69 @@ Il sistema di output delle statistiche è stato migliorato per fornire informazi
 \begin{itemize}
     \item Numero di pacchetti trasmessi/ricevuti con percentuale di successo
     \item Tempo di trasferimento effettivo (non tempo di simulazione)
-    \item Datarate in Mbps basato sul tempo di trasferimento reale
+    \item Datarate in Mbps basato sul tempo di trasferimento
     \item Informazioni dettagliate sui nodi coinvolti (auto, satellite/gNB)
     \item Informazioni rilasciate per ogni auto coinvolta nella simulazione
+\end{itemize}
+
+\subsection{Test di diverse antenne con bitrate tramite TCP}
+
+Nei seguenti esempi è stata anche modificata la potenza di trasmissione delle auto, in quanto è fondamentale che la comunicazione birdirazionale sia funzionante in TCP.
+
+\begin{table}[H]
+    \centering
+    \caption{Riepilogo Statistiche Traffico per Vari Modelli di Antenna}
+    \label{tab:traffic_summary_compact}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{lcccccc}
+        \toprule
+        \textbf{Antenna} & \textbf{gNB Tx (dB)} & \textbf{UE Tx (dB)} & \textbf{Modo} & \textbf{DL Rate (Mbps)} & \textbf{UL Rate (Mbps)} \\
+        \midrule
+        \multirow{3}{*}{Isotropic} 
+        & 40 & 23 & single & 61.67 & 48.56 \\
+        & 40 & 23 & dislocated & 61.67 & 48.56 \\
+        & $10^{-6}$ & $10^{-6}$ & dislocated & 58.60 & 48.32 \\
+        \midrule
+        \multirow{4}{*}{Parabolic} 
+        & 90 & 80 & single & 9.24 & 6.63 \\
+        & 90 & 80 & dislocated & 0 & 0 \\
+        & 110 & 110 & single & 55.82 & 47.03 \\
+        & 110 & 110 & dislocated & 20.51 & 11.70 \\
+        \midrule
+        \multirow{4}{*}{ThreeGpp} 
+        & 90 & 80 & single & 18.15 & 6.93 \\
+        & 90 & 80 & dislocated & 0 & 0 \\
+        & 100 & 100 & single & 51.83 & 43.59 \\
+        & 110 & 100 & dislocated & 12.49 & 5.80 \\
+        \midrule
+        \multirow{4}{*}{CircularAperture} 
+        & 140 & 130 & single & 9.15 & 13.47 \\
+        & 140 & 130 & dislocated & 0 & 0 \\
+        & 180 & 180 & single & 61.67 & 48.56 \\
+        & 180 & 180 & dislocated & 62.53 & 49.64 \\
+        \midrule
+        \multirow{5}{*}{Cosine} 
+        & 0.01 & 0.01 & single & 50.04 & 42.39 \\
+        & 0.01 & 0.01 & dislocated & 0 & 0 \\s
+        & 40 & 23 & single & 61.67 & 48.56 \\
+        & 40 & 23 & dislocated & 51.07 & 42.39 \\
+        & 5 & 5 & dislocated & 5.02 & 1.39 \\
+        \bottomrule
+    \end{tabular}
+    }
+\end{table}
+
+\textbf{Analisi comparativa dei modelli di antenna:}
+
+\begin{itemize}
+\item \textbf{Isotropic Antenna}: Si verifica un comportamento anomalo dato che nella simulazione vengono mantenuti throughput elevati (58.60 Mbps DL, 48.32 Mbps UL) anche con potenze di trasmissione estremamente basse ($10^{-6}$ dB) in configurazione dislocata.
+
+\item \textbf{Parabolic e ThreeGpp Antennas}: Questi modelli mostrano un comportamento fisicamente coerente, con una chiara correlazione tra potenza di trasmissione, posizionamento geometrico e qualità del collegamento. Il miglioramento delle prestazioni all'aumentare della potenza (fino a 55.82 Mbps DL per Parabolic a 110 dB).
+
+\item \textbf{CircularAperture Antenna}: Richiede potenze significativamente elevate (140--180 dB), ma si comporta compatibilmente con Parabolic e ThreeGpp.
+
+\item \textbf{Cosine Antenna}: Presenta comunicazioni anche con potenze di trasmisione stranamente estremamente basse (50.04 Mbps DL, 42.39 Mbps UL con 0.01 dB) ma rimane coerente sulla dislocazione dell'antenna per cui per avere una comunicazione funzionante necessitiamo almeno 5dBm di potenza, comunque irragionevolmente bassa, ma proporzionalmente corretta rispetto ai risultati in comunicazione diretta.
+
 \end{itemize}
 
 \section{BUG REPORT}
@@ -558,7 +639,7 @@ Il sistema di output delle statistiche è stato migliorato per fornire informazi
 ~/repos/ns-3-dev (heads/ns-3.45*) > ./ns3 run "leo-nr-send-example --carSpeed=30 --duration=5400s --mobilityPrecision=1s --traceFile=track.csv" && cp track.csv contrib/leo/examples/trace_view/punti_3d.csv && py contrib/leo/examples/trace_view/main.py
 [0/2] Re-checking globbed directories...
 [2/3] Linking CXX executable /Users/domysh/repos/ns-3-dev/build/contrib/leo/examples/ns3.45-leo-nr-send-example-default
-gNB enabled with transmission power: 40 dBm
+gNB enabled with transmission power: 40 dB
 ============= Starting simulation for 5400s =============
 ============= Starting UDP client and server applications =============
 NS_ASSERT failed, cond="rbUsed", +254.000071427s 1 file=/Users/domysh/repos/ns-3-dev/contrib/nr/model/nr-ue-phy.cc, line=1557

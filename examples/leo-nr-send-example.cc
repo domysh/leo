@@ -28,6 +28,8 @@
 
 using namespace ns3;
 
+NS_LOG_COMPONENT_DEFINE ("LeoNrSendExample");
+
 static std::ofstream traceFileOutputStream;
 static bool logging = true; // whether to enable logging from the simulation, another option is by
                          // exporting the NS_LOG environment variable
@@ -48,8 +50,8 @@ static std::map<uint32_t, pair<uint32_t, bool>> packetIdCarNodeMap; // car packe
 static std::map<std::string, Time> transferStartTime; // Transfer ID -> first packet transmission time
 static std::map<std::string, Time> transferEndTime;   // Transfer ID -> last packet reception time
 
-Ipv4Address remoteHostIp;
-uint32_t remoteHostNodeId;
+static Ipv4Address remoteHostIp;
+static uint32_t remoteHostNodeId;
 
 
 void ConnectionLogAndTrace(std::string context, Ptr<const Packet> pkt, std::string proto, bool isRx){
@@ -150,9 +152,6 @@ void ConnectionLogAndTrace(std::string context, Ptr<const Packet> pkt, std::stri
 }
 
 
-
-NS_LOG_COMPONENT_DEFINE ("LeoNrSendExample");
-
 void CourseChange (std::string context, Ptr<const MobilityModel> position)
 {
   auto mobility = DynamicCast<const GeocentricConstantPositionMobilityModel> (position);
@@ -205,8 +204,6 @@ void RxDataTrace (std::string context, Ptr<const Packet> p)
 {
     ConnectionLogAndTrace(context, p, "5G", true);
 }
-
-
 
 // Function to populate UE-gNB mapping
 void PopulateUeGnbMapping(NetDeviceContainer ueNetDev, NetDeviceContainer gnbNetDev, NodeContainer cars, NodeContainer satellites, Ipv4InterfaceContainer ueIpIface)
@@ -269,7 +266,8 @@ int main(int argc, char *argv[])
     double carSpeed = 30.0;  // m/s
     double carLatitude = 19.5;
     double carLongitude = 1.5;
-    double txPower = 40; // txPower
+    double satTxPower = 40; // txPower
+    double ueTxPower = 23; // txPower
     // Satellite parameters
     double satAntennaGainDb = 58.5; // dB
     // UE Parameters
@@ -302,14 +300,15 @@ int main(int argc, char *argv[])
                  "Valid options are: IsotropicAntennaModel, CircularApertureAntennaModel, ParabolicAntennaModel, "
                  "ThreeGppAntennaModel, and CosineAntennaModel",
                  antennaModel);
-    cmd.AddValue("satMode", "The satellite mode to use for the simulation. 'single', 'multiple', 'single-dislocated", satMode);
+    cmd.AddValue("satMode", "The satellite mode to use for the simulation. 'single', 'multiple', 'dislocated", satMode);
     cmd.AddValue("satAntennaGainDb", "The satellite antenna gain in dB", satAntennaGainDb);
     cmd.AddValue("ueAntennaGainDb", "The UE antenna gain in dB", ueAntennaGainDb);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
     cmd.AddValue("logging", "If set to 0, log components will be disabled.", logging);
     cmd.AddValue("duration", "Duration of the simulation in seconds", duration);
     cmd.AddValue("traceFile", "CSV file to store mobility trace in", traceFile);
-    cmd.AddValue("txPower", "Transmission power in dBm", txPower);
+    cmd.AddValue("satTxPower", "Transmission power in dBm", satTxPower);
+    cmd.AddValue("carTxPower", "Transmission power in dBm", ueTxPower);
     cmd.AddValue("seed", "Random seed for the simulation (default: current time)", rnd_seed);
     cmd.AddValue("mobilityPrecision",
                 "Precision for mobility updates (e.g., 50ms, 100ms, etc.)",
@@ -335,7 +334,7 @@ int main(int argc, char *argv[])
   NodeContainer satellites;
   if (satMode == "multiple") {
     satellites = orbit.Install(LeoOrbit(300, 20, 10, 10));
-  } else if (satMode == "single-dislocated") {
+  } else if (satMode == "dislocated") {
     satellites = orbit.Install (300, 20, 90, 180);
   }else if (satMode == "single") {
     satellites = orbit.Install (300, 20, 0, 0);
@@ -538,12 +537,15 @@ int main(int argc, char *argv[])
     {
         // Set gNB transmission power based on enableGnb parameter
         if (enableGnb) {
-            nrHelper->GetGnbPhy(gnbNetDev.Get(i), 0)->SetTxPower(txPower);
-            std::cout << "gNB enabled with transmission power: " << txPower << " dBm" << std::endl;
+            nrHelper->GetGnbPhy(gnbNetDev.Get(i), 0)->SetTxPower(satTxPower);
         } else {
             nrHelper->GetGnbPhy(gnbNetDev.Get(i), 0)->SetTxPower(-1000); // Effectively disable transmission
-            std::cout << "gNB disabled (transmission power set to -1000 dBm)" << std::endl;
         }
+    }
+
+    for (uint32_t i = 0; i < ueNetDev.GetN(); ++i)
+    {
+        nrHelper->GetUePhy(ueNetDev.Get(i), 0)->SetTxPower(ueTxPower);
     }
 
  
@@ -757,6 +759,10 @@ int main(int argc, char *argv[])
     // Print statistics
     std::cout << "\n============= TRAFFIC STATISTICS =============" << std::endl;
     std::cout << "Application Type: " << appType << std::endl;
+    std::cout << "Antenna Type: " << antennaModel << std::endl;
+    std::cout << "Sat-TxPower: " << satTxPower << " dBm" << std::endl;
+    std::cout << "Car-TxPower: " << ueTxPower << " dBm" << std::endl;
+    std::cout << "Satellite Distribution: " << satMode << std::endl;
     std::cout << "Packet Size: " << packetSize << " bytes" << std::endl;
     if (appType != "TCP-Unlimited") {
         std::cout << "Max Packets: " << maxPackets << std::endl;
