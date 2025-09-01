@@ -436,19 +436,21 @@ int main(int argc, char *argv[])
     // Configure scheduler
     nrHelper->SetSchedulerTypeId(NrMacSchedulerTdmaRR::GetTypeId());
 
+    //Setup antennas arrays
+    nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
+    nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+    nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
+    nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+
     if (antennaModel == "IsotropicAntennaModel")
     {
-        // Antennas for the UEs
-        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        /*
+        No Attributes are defined for this type.
+        */
         nrHelper->SetUeAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
                                             "Gain", DoubleValue(ueAntennaGainDb)
                                         )));
-    
-        // Antennas for the gNbs
-        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
         nrHelper->SetGnbAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<IsotropicAntennaModel>(
                                             "Gain", DoubleValue(satAntennaGainDb)
@@ -456,63 +458,114 @@ int main(int argc, char *argv[])
     }
     else if (antennaModel == "CircularApertureAntennaModel")
     {
-        // Antennas for the UEs
-        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        /*
+        AntennaCircularApertureRadius: The radius of the aperture of the antenna, in meters
+            Set with class: ns3::DoubleValue
+            Underlying type: double 0:1.79769e+308
+            Initial value: 0.5
+            Flags: constructwrite
+            Support level: SUPPORTED
+        AntennaMaxGainDb: The maximum gain value in dB of the antenna
+            Set with class: ns3::DoubleValue
+            Underlying type: double 0:1.79769e+308
+            Initial value: 1
+            Flags: constructwrite
+            Support level: SUPPORTED
+        AntennaMinGainDb: The minimum gain value in dB of the antenna
+            Set with class: ns3::DoubleValue
+            Underlying type: double -1.79769e+308:1.79769e+308
+            Initial value: -100
+            Flags: constructwrite
+            Support level: SUPPORTED
+        ForceGainBounds: Force GetGainDb to [AntennaMinGainDb, AntennaMaxGainDb] range
+            Set with class: ns3::BooleanValue
+            Underlying type: bool
+            Initial value: true
+            Flags: constructwriteread
+            Support level: SUPPORTED
+        OperatingFrequency: The operating frequency in Hz of the antenna
+            Set with class: ns3::DoubleValue
+            Underlying type: double 0:1.79769e+308
+            Initial value: 2e+09
+            Flags: constructwrite
+            Support level: SUPPORTED
+        */
         nrHelper->SetUeAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<CircularApertureAntennaModel>(
                                             "AntennaMaxGainDb", DoubleValue(ueAntennaGainDb)
+                                            //,"OperatingFrequency", DoubleValue(1e6)
+                                            /*
+                                                Diminuire questa frequenza fa aumentare il datarate
+                                                e l'effetto della distanza rimane comunque percepito
+                                            */
                                         )));
-    
-        // Antennas for the gNbs
-        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
         nrHelper->SetGnbAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<CircularApertureAntennaModel>(
                                             "AntennaMaxGainDb", DoubleValue(satAntennaGainDb)
+                                            //,"OperatingFrequency", DoubleValue(1e6)
                                         )));
     }
     else if (antennaModel == "ParabolicAntennaModel")
     {
-        // Antennas for the UEs
-        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        /*
+        Beamwidth: The 3dB beamwidth (degrees)
+            Set with class: ns3::DoubleValue
+            Underlying type: double 0:180
+            Initial value: 60
+            Flags: construct write read
+        Orientation: The angle (degrees) that expresses the orientation of the antenna on the x-y plane relative to the x axis
+            Set with class: ns3::DoubleValue
+            Underlying type: double -360:360
+            Initial value: 0
+            Flags: construct write read
+        MaxAttenuation: The maximum attenuation (dB) of the antenna radiation pattern.
+            Set with class: ns3::DoubleValue
+            Underlying type: double -1.79769e+308:1.79769e+308
+            Initial value: 20
+            Flags: construct write read
+        */
         nrHelper->SetUeAntennaAttribute("AntennaElement",
-                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>()));
-    
-        // Antennas for the gNbs
-        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
+                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>(
+                                            //"Orientation", DoubleValue(85)
+                                        )));
         nrHelper->SetGnbAntennaAttribute("AntennaElement",
-                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>()));
+                                        PointerValue(CreateObjectWithAttributes<ParabolicAntennaModel>(
+                                            //"Orientation", DoubleValue(85)
+                                        )));
     }
     else if (antennaModel == "ThreeGppAntennaModel")
     {
-        // Antennas for the UEs
-        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        /*
+        No Attributes are defined for this type.
+        */
         nrHelper->SetUeAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<ThreeGppAntennaModel>()));
-    
-        // Antennas for the gNbs
-        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
         nrHelper->SetGnbAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<ThreeGppAntennaModel>()));
     }
     else if (antennaModel == "CosineAntennaModel")
     {
-        // Antennas for the UEs
-        nrHelper->SetUeAntennaAttribute("NumRows", UintegerValue(2));
-        nrHelper->SetUeAntennaAttribute("NumColumns", UintegerValue(4));
+        /*
+        Beamwidth: The 3dB beamwidth (degrees)
+            Set with class: ns3::DoubleValue
+            Underlying type: double 0:180
+            Initial value: 60
+            Flags: construct write read
+        Orientation: The angle (degrees) that expresses the orientation of the antenna on the x-y plane relative to the x axis
+            Set with class: ns3::DoubleValue
+            Underlying type: double -360:360
+            Initial value: 0
+            Flags: construct write read
+        MaxGain: The gain (dB) at the antenna boresight (the direction of maximum gain)
+            Set with class: ns3::DoubleValue
+            Underlying type: double -1.79769e+308:1.79769e+308
+            Initial value: 0
+            Flags: construct write read
+        */
         nrHelper->SetUeAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<CosineAntennaModel>(
                                             "MaxGain", DoubleValue(ueAntennaGainDb)
                                         )));
-    
-        // Antennas for the gNbs
-        nrHelper->SetGnbAntennaAttribute("NumRows", UintegerValue(8));
-        nrHelper->SetGnbAntennaAttribute("NumColumns", UintegerValue(8));
         nrHelper->SetGnbAntennaAttribute("AntennaElement",
                                         PointerValue(CreateObjectWithAttributes<CosineAntennaModel>(
                                             "MaxGain", DoubleValue(satAntennaGainDb)
