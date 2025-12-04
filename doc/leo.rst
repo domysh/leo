@@ -1,6 +1,9 @@
 Fork of https://github.com/dadada/ns-3-leo
+
 This repository has been integrated and adapted for IoD_Sim (https://github.com/telematics-lab/IoD_Sim in develop branch).
+
 This version has some components updated to works with ns3.45
+
 ------------------------
 Low Earth Orbit Mobility
 ------------------------
@@ -189,5 +192,6 @@ Validation
 
 Much of the module is covered using tests. The evalutation of the module in
 part of the project thesis.
+
 
 
